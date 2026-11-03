@@ -31,7 +31,7 @@ exception to the repo's default-export convention).
 | `queryClient.tsx` | The app-wide `QueryClient` plus the single place backend events are translated into cache invalidations. |
 | `queryResultPhase.ts` | Canonical read-query priority/phase type so an empty result can never be confused with an error or a still-loading state. |
 | `relTime.ts` | Dependency-free short relative timestamp formatting for feed/audit rows. |
-| `schemaDiff.ts` | Pure schema-group construction and catalog comparison, feeding both the sidebar diff summary and the full comparison workspace. |
+| `schemaDiff.ts` | Pure schema-group construction, comparable-engine and group-name helpers, and catalog comparison, feeding both the sidebar diff summary and the full comparison workspace. |
 | `sqlBuild.ts` | Pure, unit-tested SQL/export string builders for the data grid: engine-aware identifier quoting (reused from `tableRef.ts`), literal escaping, and injection-safe WHERE/ORDER BY/paging/DML generation. |
 | `sqlStatements.ts` | Client-side statement splitter mirroring the Rust `sql_script::split_statements`/`is_effective_sql`, used only as a UX heuristic — the backend re-splits authoritatively before executing. |
 | `tableRef.ts` | Identifier quoting and table labels shared by the sidebar explorer and data view. |

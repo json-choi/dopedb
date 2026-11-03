@@ -3,7 +3,6 @@
 // writer and the per-concern sub-hooks it composes never write across that boundary.
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type Dispatch,
@@ -20,7 +19,7 @@ import {
   driversQuery,
   type CatalogScope,
 } from "../../lib/queries";
-import { buildConnectionSections } from "../../lib/schemaDiff";
+import { useSchemaComparisonGroups } from "../catalogExplorer/useSchemaComparisonGroups";
 import type { ConnectionProfile } from "../connections/domain";
 import type { ConnectionLaunchPreset } from "../connections/presets";
 import type { KnowledgeEnvironmentView } from "../knowledge/domain";
@@ -128,18 +127,10 @@ export function useAppShellWorkbenchController({
     ).catch(() => undefined);
   }, [connectionsLoaded, loadError]);
 
-  const schemaGroups = useMemo(
-    () =>
-      buildConnectionSections(connections).flatMap((section) =>
-        section.kind === "group" &&
-        !isDocumentEngine(section.group.connections[0]?.engine)
-          ? [section.group]
-          : [],
-      ),
-    [connections],
-  );
+  const schemaGroups = useSchemaComparisonGroups(scope, connections);
   const activeSchemaGroup =
-    schemaGroups.find((group) => group.key === schemaDiffGroupKey) ?? null;
+    schemaGroups.groups.find((group) => group.key === schemaDiffGroupKey) ?? null;
+  const schemaGroupsSettled = schemaGroups.settled;
   const drivers = useQuery(driversQuery());
   const supportsSql =
     !selected ||
@@ -165,13 +156,13 @@ export function useAppShellWorkbenchController({
   useActivitySeen(activeDocument?.kind ?? null, activity.unseen, activity.markSeen);
 
   useEffect(() => {
-    if (schemaDiffGroupKey && !activeSchemaGroup) {
+    if (schemaDiffGroupKey && schemaGroupsSettled && !activeSchemaGroup) {
       navigate({
         type: "schemaGroupUnavailable",
         groupKey: schemaDiffGroupKey,
       });
     }
-  }, [activeSchemaGroup, navigate, schemaDiffGroupKey]);
+  }, [activeSchemaGroup, navigate, schemaDiffGroupKey, schemaGroupsSettled]);
 
   async function reloadWorkspaceScope() {
     setSelectedId(null);

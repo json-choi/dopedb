@@ -26,7 +26,9 @@ state on top of it.
 | `useDatabaseExplorerMutations.ts` | Explorer mutation commands (delete/update connection, bind to Environment); per its header comment, preserves workspace connections when only a Project binding goes away rather than deleting the connection. |
 | `useProjectDatabaseOrder.ts` | Drag-driven reordering of databases within a Project, built on `projectResources.ts`'s pure ordering functions. |
 | `useProjectExplorerActions.ts` | Project/Environment expansion and "open environment setup" action wiring for the Explorer tree. |
-| `useSchemaGroupDrag.ts` | Pointer-driven drag-and-drop for grouping connections into a shared schema group, calling `connections/tauriAdapter.ts`'s `setConnectionsSchemaGroup`. |
+| `useSchemaGroupDrag.ts` | Pointer-driven drag-and-drop for grouping connections into a shared schema group, persisting through `useSchemaGroupEditor.ts`'s `saveSchemaGroup`. Only local, comparable connections are draggable into a group. |
+| `useSchemaGroupEditor.ts` | `schemaGroupEditable`, `saveSchemaGroup` (optimistic, reverted on refusal), and the Explorer group dialog state: join/create, leave, rename, and ungroup for local connections. Team connection groups are shared metadata owned by the connection editor. |
+| `useSchemaComparisonGroups.ts` | `useSchemaComparisonGroups` resolves every openable comparison (explicit groups plus Project environment comparisons) for the shell route; also exports the shared `environmentConnectionsQuery` and `projectScopeEnabled`. |
 
 ## For AI Agents
 

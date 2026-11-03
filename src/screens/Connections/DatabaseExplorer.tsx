@@ -22,6 +22,8 @@ import type {
 import {
   projectConnectionAssignment,
   projectDatabasesDropTargets,
+  projectSchemaGroupKeyPrefix,
+  projectSchemaGroups,
   toggledResourceKeys,
 } from "../../features/catalogExplorer/projectResources";
 import {
@@ -31,6 +33,10 @@ import {
 } from "../../features/catalogExplorer/catalogDomain";
 import { useCatalogExplorerState } from "../../features/catalogExplorer/state";
 import { useSchemaGroupDrag } from "../../features/catalogExplorer/useSchemaGroupDrag";
+import {
+  schemaGroupEditable,
+  useSchemaGroupEditor,
+} from "../../features/catalogExplorer/useSchemaGroupEditor";
 import { useSchemaDiffBaselineGroups } from "../../features/catalogExplorer/schemaDiffBaseline";
 import { useProjectDatabaseOrder } from "../../features/catalogExplorer/useProjectDatabaseOrder";
 import { useCatalogScope } from "../../lib/queries";
@@ -56,6 +62,7 @@ import { DatabaseExplorerOverlays } from "./DatabaseExplorerOverlays";
 import { DatabaseExplorerEmptyState } from "./DatabaseExplorerEmptyState";
 import { useDatabaseExplorerSearch } from "./useDatabaseExplorerSearch";
 import { SchemaConnectionGroupRow } from "./SchemaConnectionGroupRow";
+import { SchemaGroupCompareButton } from "./schemaDiffPresentation";
 import { useDatabaseExplorerMutations } from "../../features/catalogExplorer/useDatabaseExplorerMutations";
 import { useCatalogExplorerLoading } from "../../features/catalogExplorer/useCatalogExplorerLoading";
 import { useProjectExplorerActions } from "../../features/catalogExplorer/useProjectExplorerActions";
@@ -317,13 +324,28 @@ export function DatabaseExplorer({
   const withSchemaDiffBaseline = useSchemaDiffBaselineGroups(
     catalogScope.preferenceKey ?? catalogScope.key,
   );
+  const projectComparisonGroups = useMemo(
+    () =>
+      projectSchemaGroups(
+        knowledgeProjects.data ?? [],
+        environmentConnections.data ?? [],
+        connections,
+      ).map(withSchemaDiffBaseline),
+    [knowledgeProjects.data, environmentConnections.data, connections, withSchemaDiffBaseline],
+  );
+  // A database bound in a Project compares across that Project's environments; an
+  // explicit group only covers unassigned connections, which no Project group contains.
   const groupByConnectionId = useMemo(() => {
     const groups = new Map<string, SchemaConnectionGroup>();
     for (const [connectionId, group] of draggableGroupByConnectionId) {
       groups.set(connectionId, withSchemaDiffBaseline(group));
     }
+    for (const group of projectComparisonGroups) {
+      for (const connection of group.connections) groups.set(connection.id, group);
+    }
     return groups;
-  }, [draggableGroupByConnectionId, withSchemaDiffBaseline]);
+  }, [draggableGroupByConnectionId, projectComparisonGroups, withSchemaDiffBaseline]);
+  const schemaGroupEditor = useSchemaGroupEditor(connections, onConnectionUpdated);
   const errs: Record<string, CatalogLoadIssue> = { ...overviewErrs };
   for (const [connectionId, issue] of Object.entries(refreshErrs)) {
     errs[connectionId] = issue;
@@ -472,6 +494,11 @@ export function DatabaseExplorer({
         }
         unbinding={binding?.id === unbindingBindingId}
         onOpenSchemaDiff={openConnectionSchemaDiff}
+        onEditSchemaGroup={
+          schemaGroupEditable(connection) && unassignedConnectionIds.has(connection.id)
+            ? () => schemaGroupEditor.open({ kind: "connection", connection })
+            : undefined
+        }
         onOpenTable={(table) => onOpenTable(connection, table)}
         onRequestDetails={(database) =>
           requestDetails(connection.id, database)
@@ -503,6 +530,23 @@ export function DatabaseExplorer({
     );
   }
 
+  function projectComparisonButtons(projectId: string) {
+    const groups = projectComparisonGroups.filter((group) =>
+      group.key.startsWith(projectSchemaGroupKeyPrefix(projectId)),
+    );
+    if (groups.length === 0) return null;
+    return groups.map((group) => (
+      <SchemaGroupCompareButton
+        key={group.key}
+        group={group}
+        catalogs={comparisonCatalogs}
+        variant="ghost"
+        onEnsureLoaded={ensureLoaded}
+        onOpen={onOpenSchemaDiff}
+      />
+    ));
+  }
+
   function renderGroup(sectionGroup: SchemaConnectionGroup) {
     const group = withSchemaDiffBaseline(sectionGroup);
     return (
@@ -514,6 +558,11 @@ export function DatabaseExplorer({
         catalogs={comparisonCatalogs}
         onEnsureLoaded={ensureLoaded}
         onOpenSchemaDiff={onOpenSchemaDiff}
+        onEditGroup={
+          group.connections.every(schemaGroupEditable)
+            ? (editable) => schemaGroupEditor.open({ kind: "group", group: editable })
+            : undefined
+        }
         renderConnection={(connection, treeParentKey) =>
           renderConnection(connection, true, treeParentKey, 2)
         }
@@ -649,6 +698,7 @@ export function DatabaseExplorer({
               analysisFilter={analysisFilter}
               databaseBindingOrder={projectDatabaseOrder.bindingOrder(project.id)}
               renderConnection={renderConnection}
+              schemaComparisons={projectComparisonButtons(project.id)}
               onToggleProject={() =>
                 setExpandedProjectIds((current) =>
                   toggledResourceKeys(current, project.id),
@@ -727,6 +777,7 @@ export function DatabaseExplorer({
         orderAnnouncement={projectDatabaseOrder.announcement}
         connections={connections}
         pendingGroupChange={pendingGroupChange}
+        schemaGroupEditor={schemaGroupEditor}
         workspaceDialog={workspaceDialog}
         onProjectCreated={openCreatedProject}
         onEnvironmentCreated={openCreatedEnvironment}

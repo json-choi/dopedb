@@ -36,6 +36,7 @@ import { useConnectionTestCommand } from "./useConnectionTestCommand";
 import { useDeleteConnection } from "./useDeleteConnection";
 import { useManagedConnectionRecovery } from "./useManagedConnectionRecovery";
 import { useConnectionDatabaseDiscovery } from "./useConnectionDatabaseDiscovery";
+import { schemaGroupNames } from "../../lib/schemaDiff";
 
 export function useConnectionProfileController({
   connections,
@@ -310,6 +311,8 @@ export function useConnectionProfileController({
         setDraft: form.setPortDraft,
       },
       flags: form.flags,
+      /** Existing group names this engine can join, offered while typing a group. */
+      schemaGroupNames: schemaGroupNames(connections, form.value.engine),
       identity: {
         isNew: identity.isNew,
         persisted: identity.persisted,

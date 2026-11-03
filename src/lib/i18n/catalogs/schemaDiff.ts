@@ -49,10 +49,10 @@ export const schemaDiffCatalog = defineCatalog(
     "schemaDiff.inSyncBody":
       "Every compared property matches. Properties that are not compared can still differ.",
     "schemaDiff.incompatibleBody":
-      "A schema group can compare databases that use the same engine. Move incompatible connections to another group.",
+      "A schema comparison group can compare databases that use the same engine. Move incompatible connections to another group.",
     "schemaDiff.incompatibleTitle": "This group contains different database engines",
     "schemaDiff.loadFailed": "Could not load schema",
-    "schemaDiff.needTargetBody": "Add another connection to this schema group to compare environments.",
+    "schemaDiff.needTargetBody": "Add another connection to this schema comparison group to compare environments.",
     "schemaDiff.needTargetTitle": "A second database is required",
     "schemaDiff.noMatches": "No differences of this type.",
     "schemaDiff.notRead": "Not read yet",
@@ -64,8 +64,8 @@ export const schemaDiffCatalog = defineCatalog(
     "schemaDiff.objectView": "View",
     "schemaDiff.onlyInBaseline": "Baseline only",
     "schemaDiff.open": "Compare schemas",
-    "schemaDiff.openSummary": "Compare databases in this schema group: {summary}",
-    "schemaDiff.openTitle": "Compare databases in this schema group",
+    "schemaDiff.openSummary": "Compare this group's database schemas: {summary}",
+    "schemaDiff.openTitle": "Compare this group's database schemas",
     "schemaDiff.reading": "Reading the {connection} schema…",
     "schemaDiff.refreshAll": "Reread both schemas",
     "schemaDiff.refreshFailed":
@@ -127,10 +127,10 @@ export const schemaDiffCatalog = defineCatalog(
     "schemaDiff.inSyncBody":
       "비교한 속성은 모두 같습니다. 비교하지 않는 속성은 다를 수 있습니다.",
     "schemaDiff.incompatibleBody":
-      "스키마 그룹은 같은 엔진을 사용하는 DB끼리 비교할 수 있습니다. 호환되지 않는 연결을 다른 그룹으로 옮겨주세요.",
+      "스키마 비교 그룹은 같은 엔진을 사용하는 DB끼리 비교할 수 있습니다. 호환되지 않는 연결을 다른 그룹으로 옮겨주세요.",
     "schemaDiff.incompatibleTitle": "서로 다른 DB 엔진이 같은 그룹에 있습니다",
     "schemaDiff.loadFailed": "스키마를 불러오지 못했습니다",
-    "schemaDiff.needTargetBody": "환경을 비교하려면 이 스키마 그룹에 다른 연결을 추가하세요.",
+    "schemaDiff.needTargetBody": "환경을 비교하려면 이 스키마 비교 그룹에 다른 연결을 추가하세요.",
     "schemaDiff.needTargetTitle": "비교할 DB가 하나 더 필요합니다",
     "schemaDiff.noMatches": "이 유형의 차이가 없습니다.",
     "schemaDiff.notRead": "아직 읽지 않음",

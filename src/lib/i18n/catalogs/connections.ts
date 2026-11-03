@@ -597,20 +597,32 @@ export const connectionsCatalog = defineCatalog(
     "connections.schemaDiffTableMissing": "Missing in this database; exists in the baseline",
     "connections.schemaDiffTitle":
       "Compared with the baseline: +{added} only here, −{missing} missing here, ~{changed} changed",
-    "connections.schemaComparison": "Schema comparison group",
-    "connections.schemaGroup": "Schema group",
+    "connections.schemaGroup": "Schema comparison group",
     "connections.schemaGroupConfirmGroup":
-      'Add "{connection}" to schema group "{group}"?',
+      'Add "{connection}" to schema comparison group "{group}"?',
     "connections.schemaGroupConfirmPair":
-      'Group "{source}" and "{target}" together as "{group}"?',
+      'Group "{source}" and "{target}" together as schema comparison group "{group}"?',
+    "connections.schemaGroupDialogConnection":
+      'Connections with the same group name are compared with each other. Pick an existing group for "{connection}" or type a new name.',
+    "connections.schemaGroupDialogGroup":
+      "Renaming moves all {count} connections in this group.",
+    "connections.schemaGroupDissolve": "Ungroup",
+    "connections.schemaGroupEdit": "Schema comparison group…",
+    "connections.schemaGroupEditGroup": "Rename or ungroup…",
+    "connections.schemaGroupHint":
+      "Connections with the same group name can be compared. Databases in a Project are compared across its environments without a group.",
+    "connections.schemaGroupLeave": "Remove from group",
+    "connections.schemaGroupMenu": "{group} group actions",
+    "connections.schemaGroupName": "Group name",
     "connections.schemaGroupPlaceholder": "billing-api",
-    "connections.schemaGroupTitle": "{group} schema group",
+    "connections.schemaGroupProjectHint":
+      "This database is in a Project and is compared across the Project's environments from the Databases row. A group name only applies when it is not in a Project.",
+    "connections.schemaGroupRenameTitle": "Schema comparison group",
+    "connections.schemaGroupTitle": "{group} schema comparison group",
     "connections.schemaScopeSaveFirst":
       "Apply this data source first, then return here to discover its schemas.",
     "connections.schemas": "Schemas",
-    "connections.schemasBody":
-      "Connections in one schema group can be compared across environments.",
-    "connections.schemaGroupUpdated": "Schema group updated",
+    "connections.schemaGroupUpdated": "Schema comparison group updated",
     "connections.sequences": "Sequences ({count})",
     "connections.showDdl": "Show CREATE DDL",
     "connections.showRowCounts": "Show row counts",
@@ -1234,20 +1246,32 @@ export const connectionsCatalog = defineCatalog(
     "connections.schemaDiffTableMissing": "이 DB에는 없고 기준 DB에는 있습니다",
     "connections.schemaDiffTitle":
       "기준 DB와 비교: +{added} 이 DB에만 있음, −{missing} 이 DB에 없음, ~{changed} 변경",
-    "connections.schemaComparison": "스키마 비교 그룹",
-    "connections.schemaGroup": "스키마 그룹",
+    "connections.schemaGroup": "스키마 비교 그룹",
     "connections.schemaGroupConfirmGroup":
-      '"{connection}"을(를) 스키마 그룹 "{group}"에 추가할까요?',
+      '"{connection}"을(를) 스키마 비교 그룹 "{group}"에 추가할까요?',
     "connections.schemaGroupConfirmPair":
-      '"{source}"와 "{target}"을(를) 같은 스키마 그룹 "{group}"으로 묶을까요?',
+      '"{source}"와 "{target}"을(를) 스키마 비교 그룹 "{group}"으로 묶을까요?',
+    "connections.schemaGroupDialogConnection":
+      '그룹 이름이 같은 연결끼리 스키마를 비교합니다. "{connection}"에 쓸 기존 그룹을 고르거나 새 이름을 입력하세요.',
+    "connections.schemaGroupDialogGroup":
+      "이름을 바꾸면 이 그룹의 연결 {count}개가 모두 옮겨집니다.",
+    "connections.schemaGroupDissolve": "그룹 해제",
+    "connections.schemaGroupEdit": "스키마 비교 그룹…",
+    "connections.schemaGroupEditGroup": "이름 바꾸기·그룹 해제…",
+    "connections.schemaGroupHint":
+      "그룹 이름이 같은 연결끼리 비교할 수 있습니다. Project에 넣은 DB는 그룹 없이 Project 환경끼리 비교합니다.",
+    "connections.schemaGroupLeave": "그룹에서 빼기",
+    "connections.schemaGroupMenu": "{group} 그룹 작업",
+    "connections.schemaGroupName": "그룹 이름",
     "connections.schemaGroupPlaceholder": "billing-api",
-    "connections.schemaGroupTitle": "{group} 스키마 그룹",
+    "connections.schemaGroupProjectHint":
+      "이 DB는 Project에 들어 있어 데이터베이스 행에서 Project 환경끼리 비교합니다. 그룹 이름은 Project에 없을 때만 쓰입니다.",
+    "connections.schemaGroupRenameTitle": "스키마 비교 그룹",
+    "connections.schemaGroupTitle": "{group} 스키마 비교 그룹",
     "connections.schemaScopeSaveFirst":
       "이 데이터 소스를 먼저 적용한 뒤 돌아와 스키마를 찾으세요.",
     "connections.schemas": "스키마",
-    "connections.schemasBody":
-      "같은 스키마 그룹의 연결은 환경별로 비교할 수 있습니다.",
-    "connections.schemaGroupUpdated": "스키마 그룹이 업데이트되었습니다",
+    "connections.schemaGroupUpdated": "스키마 비교 그룹이 업데이트되었습니다",
     "connections.sequences": "시퀀스 ({count})",
     "connections.showDdl": "CREATE DDL 보기",
     "connections.showRowCounts": "행 수 표시",

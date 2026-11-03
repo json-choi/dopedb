@@ -22,7 +22,9 @@ Project-pinned Agent's `schema_diff` reuse this same read-only comparison.
 ### Working In This Directory
 - Mounted by `WorkbenchContent.tsx` when `route.activeSchemaGroup` is set
   (keyed by `group.key`), receiving the `SchemaConnectionGroup` and an
-  `onClose` callback.
+  `onClose` callback. A group is either an explicit schema comparison group
+  or a Project environment comparison (`project:<id>:<engine>`); both resolve
+  through `features/catalogExplorer/useSchemaComparisonGroups.ts`.
 - Diff logic (`compareCatalogs`, `defaultSchemaBaseline`, `diffCounts`,
   `schemaGroupIsCompatible`) lives in `src/lib/schemaDiff.ts`, not in this
   screen — this directory only presents results and drives baseline/reread

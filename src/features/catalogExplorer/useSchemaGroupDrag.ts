@@ -7,8 +7,6 @@ import type {
   ConnectionId,
   ConnectionProfile,
 } from "../connections/domain";
-import { setConnectionsSchemaGroup } from "../connections/tauriAdapter";
-import { isDocumentEngine } from "../../lib/capabilities";
 import { useI18n } from "../../lib/i18n";
 import {
   buildConnectionSections,
@@ -21,6 +19,7 @@ import {
   type DropTarget,
   type ProjectDatabaseOrderDrag,
 } from "./catalogDomain";
+import { saveSchemaGroup, schemaGroupEditable } from "./useSchemaGroupEditor";
 import type {
   ProjectDatabaseOrderPlacement,
   ProjectDatabasesDropTarget,
@@ -124,8 +123,8 @@ export function useSchemaGroupDrag(
       !!dragged &&
       dragged.id !== target.id &&
       dragged.engine === target.engine &&
-      dragged.engine !== "bigquery" &&
-      !isDocumentEngine(dragged.engine)
+      schemaGroupEditable(dragged) &&
+      schemaGroupEditable(target)
     );
   }
 
@@ -139,8 +138,8 @@ export function useSchemaGroupDrag(
       !!dragged &&
       !!engine &&
       dragged.engine === engine &&
-      dragged.engine !== "bigquery" &&
-      !isDocumentEngine(dragged.engine) &&
+      schemaGroupEditable(dragged) &&
+      group.connections.every(schemaGroupEditable) &&
       !group.connections.some((connection) => connection.id === dragged.id)
     );
   }
@@ -167,23 +166,6 @@ export function useSchemaGroupDrag(
       && options.unassignedConnectionIds?.has(dragId) === true
       && !target.connectionIds.has(dragId)
       && typeof options.onDropOnEnvironment === "function";
-  }
-
-  async function saveGroup(ids: ConnectionId[], schemaGroup: string) {
-    const originals = ids
-      .map((id) => connectionById(id))
-      .filter((connection): connection is ConnectionProfile => !!connection);
-    for (const id of ids) {
-      const original = connectionById(id);
-      if (original) onConnectionUpdated({ ...original, schemaGroup });
-    }
-    try {
-      const saved = await setConnectionsSchemaGroup(ids, schemaGroup);
-      saved.forEach(onConnectionUpdated);
-    } catch (error) {
-      originals.forEach(onConnectionUpdated);
-      throw error;
-    }
   }
 
   async function applyDrop(dragId: string, target: DropTarget) {
@@ -253,7 +235,7 @@ export function useSchemaGroupDrag(
 
   async function persistGroupChange(ids: ConnectionId[], group: string) {
     try {
-      await saveGroup(ids, group);
+      await saveSchemaGroup(connections, ids, group, onConnectionUpdated);
       toast(t("connections.schemaGroupUpdated"));
     } catch (error) {
       toast(errMessage(error), "error");

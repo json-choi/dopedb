@@ -25,6 +25,8 @@ import { ManagedWorkspaceConnectionField } from "./ManagedWorkspaceConnectionFie
 import { ConnectionDatabaseField } from "./ConnectionDatabaseField";
 import { ConnectionCloudflareD1Fields } from "./ConnectionCloudflareD1Fields";
 import { ConnectionTeamFields } from "./ConnectionTeamFields";
+import { ConnectionSchemaGroupField } from "./ConnectionSchemaGroupField";
+import { schemaComparableEngine } from "../../lib/schemaDiff";
 
 type Controller = ConnectionEditorController;
 
@@ -352,6 +354,9 @@ export function ConnectionGeneralTab({
           </SelectInput>
         )}
       </PropertyRow>
+      {schemaComparableEngine(form.engine) ? (
+        <ConnectionSchemaGroupField profile={profile} />
+      ) : null}
     </div>
   );
 }
