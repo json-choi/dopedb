@@ -80,9 +80,9 @@ regex = "1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unicode-normalization = "0.1.25"
 futures = "0.3"
-rust_xlsxwriter = { version = "0.99.0", features = ["constant_memory"] }
-calamine = "0.36.1"
-zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+rust_xlsxwriter = { version = "0.102.0", features = ["constant_memory"] }
+calamine = "0.38.0"
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls"] }
 tokio-util = "0.7.19"
 dashmap = "6.2.1"
@@ -104,7 +104,7 @@ tauri-plugin-process = "2.3.1"
 tauri-plugin-single-instance = { version = "2.4.4", features = ["deep-link"] }
 # Updates ship as signed macOS .app.tar.gz and Windows NSIS .exe artifacts, so the
 # plugin's default `zip` feature (Windows .zip and Linux AppImage archives) is off.
-# Keep it off: it calls zip's extract API that osv-scanner.toml waives.
+# Keep it off: it calls zip's bulk extract API, which DopeDB never uses (clippy.toml).
 tauri-plugin-updater = { version = "2.11.0", default-features = false, features = ["rustls-tls", "system-proxy"] }
 
 [target.'cfg(unix)'.dependencies]
