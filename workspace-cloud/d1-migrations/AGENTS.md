@@ -32,6 +32,7 @@ new migrations here from `../lib/d1/schema/index.ts`.
 | `0013_team_connection_default_read.sql` | Redefines the three team-read triggers (`workspace_connection_team_read_enable`, `workspace_member_team_read_insert`, `workspace_member_team_read_update`) without the managed/provisioned restriction so a new team connection opens to the team for every credential method. Triggers only: the `workspace_connection` table is not rebuilt because a rebuild's `DROP TABLE` cascades into grants, principals, revocations and exclusions, and the member-local CHECK still states a true invariant. |
 
 | `0014_remove_knowledge_graph.sql` | Retires nine graph/grant/mapping/code-index tables and graph-only source fields. Preserves GitHub identities and webhook receipts while rebuilding sources with foreign keys enabled; restores storage-type triggers. Retires indexing queue states while preserving revocations and actual source failures. Historical applied migrations remain immutable. |
+| `0015_account_provider_identity.sql` | Better Auth 1.7.3+ stopped writing `account.issuer`, so its NOT NULL constraint rejected every new sign-up and link. Rebuilds `account` with foreign keys enabled (nothing references it): `issuer` becomes nullable with existing values kept, uniqueness moves from `(issuer, account_id)` to `(provider_id, account_id)`, and the `0002` storage-type triggers are restored. Dropping the column needs a maintenance window because pre-0015 Workers still select it. |
 
 ## Subdirectories
 | Directory | Purpose |

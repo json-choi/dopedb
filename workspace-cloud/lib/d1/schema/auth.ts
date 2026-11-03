@@ -45,7 +45,9 @@ export const account = sqliteTable(
     id: text("id").default(uuidDefault).primaryKey().notNull(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
-    issuer: text("issuer").notNull(),
+    // Written only by Better Auth 1.7.0-1.7.2. Accounts are keyed by provider and
+    // subject again, so new rows leave it null; dropping it needs a maintenance window.
+    issuer: text("issuer"),
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
@@ -59,7 +61,7 @@ export const account = sqliteTable(
   },
   (table) => [
     index("account_user_idx").on(table.userId),
-    uniqueIndex("account_issuer_subject_idx").on(table.issuer, table.accountId),
+    uniqueIndex("account_provider_subject_idx").on(table.providerId, table.accountId),
   ],
 );
 

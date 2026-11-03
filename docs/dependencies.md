@@ -74,11 +74,10 @@ held because they were less than 24 hours old. Notable reviewed upgrades include
 ESLint 10, Vite 8.2, Next.js 16.3, Better Auth 1.7, and the current eligible
 Claude and Codex ACP adapters.
 
-Better Auth 1.7 changes account identity storage. Because this repository is
-still on its resettable pre-MVP baseline, the schema now declares the required
-`issuer` and explicitly preserves provider-scoped identity with
-`identityStrategy: "provider-id"`. No remote database migration is performed by
-dependency refreshes.
+Better Auth 1.7.0 through 1.7.2 wrote a required `account.issuer` column; 1.7.3
+and later key accounts by provider and subject again and leave it null. D1
+migration 0015 relaxed that column and made `(provider_id, account_id)` unique.
+Dependency refreshes never perform a remote database migration on their own.
 
 Cargo refreshed 148 compatible packages, including the current Tauri plugins,
 MongoDB driver, keyring, RustCrypto AEAD stack, XLSX writer, and tree-sitter.
@@ -87,32 +86,22 @@ Actions remain pinned to the commit behind their latest eligible stable tag.
 OSV exceptions are explicit and expire on 2026-12-04: Linux-only GTK3 entries
 that are not compiled for the shipped macOS or verified Windows targets, plus
 unmaintained-only `unic-*` entries currently required by Tauri's `urlpattern`
-build dependency. The `zip` extraction advisories RUSTSEC-2026-0367, -0368, and
--0369 expire on 2026-11-17: the fix exists only in zip 9, which the XLSX crates
-do not accept yet. DopeDB never calls `extract()`, and the root `clippy.toml`
-rejects the extract APIs. The Tauri updater's default `zip` feature, the only
-caller, is disabled because DopeDB ships macOS `.app.tar.gz` and Windows NSIS
-`.exe` updates, not `.zip` packages. Keep it disabled while the exceptions,
-which are scoped by advisory ID, remain. The `zvariant`, `zbus_names`, and
+build dependency. The XLSX crates now take zip 9 (calamine 0.38, rust_xlsxwriter
+0.102), so the zip advisories are fixed rather than waived. DopeDB still never calls
+zip's bulk `extract()`: the root `clippy.toml` rejects those APIs and the Tauri
+updater's default `zip` feature stays disabled because DopeDB ships macOS
+`.app.tar.gz` and Windows NSIS `.exe` updates, not `.zip` packages. The `zvariant`, `zbus_names`, and
 `zvariant_derive` advisories RUSTSEC-2026-0370, -0371, and -0372 have no fixed
 release yet; they expire on 2026-12-04 because those crates arrive only through
 the Linux-only `zbus` D-Bus stack of `keyring` and the Tauri opener and
-single-instance plugins. `ammonia` is pinned to 4.2.4 for RUSTSEC-2026-0373. The zip header
-parser-differential advisory GHSA-m665-v7pm-7grj also expires on 2026-11-17
-with the other zip entries: its fix is zip 9.0.5, and DopeDB reads archives only
-through `ZipArchive` (XLSX entries in memory, and the size- and SHA-256-pinned
-BigQuery SDK archive on Windows), never through a second streaming reader. The
-`block-buffer` 0.10.4 advisory GHSA-qwgh-2vcv-g2f7 expires on 2026-11-30: the
+single-instance plugins. `ammonia` is pinned to 4.2.4 for RUSTSEC-2026-0373. The `block-buffer` 0.10.4 advisory GHSA-qwgh-2vcv-g2f7 expires on 2026-11-30: the
 fix exists only in 0.12.1, which the digest 0.10 hashes used by sqlx, minisign
 and Tauri cannot take, and the bug needs a panicking compress callback that
-those hashes never have. Workspace Cloud keeps `better-auth` 1.7.4 until an
-explicit identity migration: 1.7.7 and later reject the provider-scoped
-`account.issuer` column the baseline keeps for `identityStrategy: "provider-id"`.
-Its advisories GHSA-965c-763c-88jm (Magic Link), GHSA-r4xp-prcw-77qf (OAuth
-Proxy), and GHSA-44jh-23m7-hpcf (PostgreSQL rate limiting) expire on 2026-11-30;
-none of those plugins or that database is in use. These exceptions live in
-`workspace-cloud/osv-scanner.toml`, because OSV-Scanner reads the config beside
-each lockfile.
+those hashes never have. Workspace Cloud runs `better-auth` 1.7.15. D1 migration 0015 relaxed the
+`account.issuer` column that 1.7.3 and later no longer write and moved account
+uniqueness to `(provider_id, account_id)`. The build-tool `glob` and `minimatch`
+advisories are fixed by `pnpm-workspace.yaml` overrides to glob 14.0.2 and
+minimatch 11.0.1 in the root, site, and Workspace Cloud lockfiles.
 Any other OSV finding fails CI.
 
 The following registry releases were intentionally held because they were less
