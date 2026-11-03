@@ -46,14 +46,16 @@ connection persistence itself.
 | `CatalogTreeRows.tsx` | Presentational tree rows (`CatalogRelationRow`, `CatalogMissingRelationRow`, `CatalogObjectRow`) and a relation's metadata rows (`CatalogMetadataSectionRow`, `CatalogColumnRow`, `CatalogKeyRow` for primary/unique/foreign-with-target/check keys, `CatalogIndexRow`), each its own tree item; virtualization keys/expansion policy stay in `CatalogTree.tsx`. |
 | `CatalogTreeStatus.tsx` | `CatalogTreeStatus` — renders the tree's mutually exclusive access/load/empty states. |
 | `ConnectionNode.tsx` | Default-exported `ConnectionNode` — one connection's row in the tree, with its actions menu and drag source. |
-| `SchemaConnectionGroupRow.tsx` | `SchemaConnectionGroupRow` — one schema-comparison group's row, showing diff-compatibility and change counts against the member-chosen baseline. |
+| `SchemaConnectionGroupRow.tsx` | `SchemaConnectionGroupRow` — one explicit schema comparison group header with its `SchemaGroupCompareButton` and, when every member is local, a rename/ungroup menu. |
+| `SchemaGroupDialog.tsx` | Names, renames, leaves, or dissolves an explicit schema comparison group without drag, suggesting existing same-engine group names. |
+| `ConnectionSchemaGroupField.tsx` | The connection editor's single schema comparison group row on the General tab, with existing-group suggestions and a Project-aware hint. |
 | `KnowledgeProjectTree.tsx` | `KnowledgeProjectTree` — one Knowledge Project's database/source/analysis resources; injects a connection-catalog row renderer rather than loading catalogs itself. |
 | `useCatalogTree.ts` | `useCatalogTree` plus helpers `shouldLoadCatalogDetails` and `databaseCatalogKey`; drives per-database catalog loading and the `CatalogLoadIssue` state consumed by `CatalogTreeStatus.tsx`. |
 | `useCatalogTreeProjection.ts` | `useCatalogTreeProjection` — builds the filtered catalog and schema groups consumed by the virtual tree; rendering/expansion stays in `CatalogTree.tsx`. |
 | `useDatabaseExplorerKnowledge.ts` | `useDatabaseExplorerKnowledge` — owns Knowledge Project inventory, resource expansion, and analysis query lifecycles consumed by Database Explorer. |
 | `useDatabaseExplorerSearch.ts` | `useDatabaseExplorerSearch` — cross-catalog search result aggregation and keyboard result selection/navigation. |
 | `catalogOverview.ts` | `catalogFromOverview` — builds the navigation `Catalog` from a lightweight `CatalogOverview` (via `features/catalog`'s `navigationTableFromOverview`) and hydrates rows from the shared full snapshot. |
-| `schemaDiffPresentation.tsx` | `schemaDiffForConnection`, `schemaTableDiffTitle`, and the `SchemaDiffTrigger` button used to open a schema comparison from the tree. |
+| `schemaDiffPresentation.tsx` | `schemaDiffForConnection`, `schemaTableDiffTitle`, the row `SchemaDiffTrigger`, and `SchemaGroupCompareButton`, which explicit group rows and each Project's Databases row share to open a comparison. |
 
 ## For AI Agents
 

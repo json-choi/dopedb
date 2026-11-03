@@ -7,7 +7,14 @@ import type {
   KnowledgeProject,
 } from "../knowledge/domain";
 import { compareEnvironmentKinds } from "../../lib/environmentKind";
-import type { ConnectionProfile } from "../connections/domain";
+import {
+  schemaComparableEngine,
+  type SchemaConnectionGroup,
+} from "../../lib/schemaDiff";
+import {
+  databaseEngineLabel,
+  type ConnectionProfile,
+} from "../connections/domain";
 
 export type ProjectEnvironmentResource<T> = {
   environment: KnowledgeEnvironment;
@@ -339,4 +346,53 @@ export function moveProjectDatabaseResource<T extends ProjectDatabaseResource>(
   return next.flatMap((block) =>
     block.rows.map(({ resource }) => resource.id),
   );
+}
+
+/** Every comparison key of one Project starts with this prefix. */
+export function projectSchemaGroupKeyPrefix(projectId: string) {
+  return `project:${projectId}:`;
+}
+
+/**
+ * A Project's schema comparisons: its databases bound across environments, one group
+ * per comparable engine with at least two distinct connections, most sensitive
+ * environment first. The Project's environments are the comparison unit, so these
+ * groups need no separate label and never change a connection's explicit group.
+ */
+export function projectSchemaGroups(
+  projects: readonly KnowledgeProject[],
+  bindings: readonly EnvironmentConnection[],
+  connections: readonly ConnectionProfile[],
+): SchemaConnectionGroup[] {
+  const connectionById = new Map<string, ConnectionProfile>(
+    connections.map((connection) => [connection.id, connection]),
+  );
+  return projects.flatMap((project) => {
+    const byEngine = new Map<ConnectionProfile["engine"], ConnectionProfile[]>();
+    const environments = [...project.environments].sort((left, right) =>
+      compareEnvironmentKinds(left.kind, right.kind),
+    );
+    for (const environment of environments) {
+      for (const binding of bindings) {
+        if (binding.projectEnvironmentId !== environment.id) continue;
+        const connection = binding.connectionId
+          ? connectionById.get(binding.connectionId)
+          : undefined;
+        if (!connection || !schemaComparableEngine(connection.engine)) continue;
+        const members = byEngine.get(connection.engine) ?? [];
+        if (!members.some((member) => member.id === connection.id)) {
+          members.push(connection);
+        }
+        byEngine.set(connection.engine, members);
+      }
+    }
+    const groups = [...byEngine].filter(([, members]) => members.length > 1);
+    return groups.map(([engine, members]) => ({
+      key: `${projectSchemaGroupKeyPrefix(project.id)}${engine}`,
+      label: groups.length > 1
+        ? `${project.name} · ${databaseEngineLabel(engine)}`
+        : project.name,
+      connections: members,
+    }));
+  });
 }

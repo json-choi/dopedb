@@ -85,6 +85,8 @@ interface KnowledgeProjectTreeProps {
   analysisFilter: string;
   databaseBindingOrder: readonly string[];
   renderConnection: RenderConnection;
+  /** Environment-to-environment schema comparison buttons, or null when none applies. */
+  schemaComparisons: ReactNode;
   onToggleProject: () => void;
   onToggleResource: (resourceKey: string) => void;
   onAddEnvironment: () => void;
@@ -238,6 +240,7 @@ function KnowledgeProjectResources({
   analysisFilter,
   databaseBindingOrder,
   renderConnection,
+  schemaComparisons,
   onToggleResource,
   onAddEnvironment,
   onDeleteProject,
@@ -342,6 +345,13 @@ function KnowledgeProjectResources({
           treeItem={{ key: databaseTreeKey, parentKey: projectTreeKey, level: 2 }}
           selected={activeEnvironmentBelongsToProject && activeView === "databases"}
           actions={(
+            <>
+            {schemaComparisons ? (
+              // Always visible, unlike the hover actions, and clear of the add button.
+              <span className="tw:flex tw:shrink-0 tw:items-center tw:gap-[2px] tw:pr-[calc(var(--ds-control-xs)+var(--ds-space-1))]">
+                {schemaComparisons}
+              </span>
+            ) : null}
             <TreeRowActions>
               <Button
                 iconOnly
@@ -359,6 +369,7 @@ function KnowledgeProjectResources({
                 <Icon name="plus" />
               </Button>
             </TreeRowActions>
+            </>
           )}
           onToggle={() => {
             onToggleResource(databaseKey);

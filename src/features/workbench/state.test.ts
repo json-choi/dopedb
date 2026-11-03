@@ -2320,7 +2320,7 @@ describe("workbench state ownership", () => {
       const danger = (message: string) => ({ tone: "danger" as const, message });
       const profile = {
         environmentContext: { bound: false, marker: null, pending: false, project: undefined, environment: undefined, error: null },
-        form, set: vi.fn(), flags: connectionProfileFlags(form),
+        form, set: vi.fn(), flags: connectionProfileFlags(form), schemaGroupNames: ["billing-api"],
         identity: { isNew: false, persisted: true },
         credentials: { password: "", setPassword: vi.fn() },
         url: { mode: "default" }, options: {}, port: { draft: "0" },

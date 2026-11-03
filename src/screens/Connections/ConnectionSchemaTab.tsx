@@ -23,7 +23,7 @@ export function ConnectionSchemaTab({
   schema: ConnectionEditorController["schema"];
 }) {
   const { t } = useI18n();
-  const { form, set, options } = profile;
+  const { form, options } = profile;
 
   return (
     <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[720px] tw:gap-5">
@@ -128,27 +128,6 @@ export function ConnectionSchemaTab({
               )
             }
             placeholder="audit_*"
-          />
-        </Field>
-      </section>
-
-      <div className="tw:h-px tw:bg-border-subtle" />
-
-      <section className="tw:grid tw:gap-3">
-        <h3>{t("connections.schemaComparison")}</h3>
-        <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
-          {t("connections.schemasBody")}
-        </p>
-        <Field label={t("connections.schemaGroup")}>
-          <TextInput
-            value={form.schemaGroup ?? ""}
-            // Spaces are part of a group name; only surrounding blanks are dropped,
-            // once editing ends, so typing "app core" keeps its space.
-            onChange={(event) => set("schemaGroup", event.target.value || null)}
-            onBlur={(event) =>
-              set("schemaGroup", event.target.value.trim() || null)
-            }
-            placeholder={t("connections.schemaGroupPlaceholder")}
           />
         </Field>
       </section>

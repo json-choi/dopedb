@@ -5,6 +5,7 @@
 // so `app_dev.public.orders` and `app_prod.public.orders` are one relation.
 import type { Catalog, CatalogTable } from "../ipc/types";
 import type { ConnectionProfile } from "../features/connections/domain";
+import { isDocumentEngine } from "./capabilities";
 import { tableKey } from "./tableRef";
 
 const ENV_ORDER: Record<string, number> = {
@@ -180,6 +181,26 @@ export function buildConnectionSections(connections: ConnectionProfile[]): Conne
   return sections
     .sort((a, b) => a.index - b.index)
     .map(({ index: _index, ...section }) => section);
+}
+
+/** Engines whose catalogs the schema comparison reads: relational SQL catalogs only. */
+export function schemaComparableEngine(engine: ConnectionProfile["engine"] | undefined): boolean {
+  return !!engine && engine !== "bigquery" && !isDocumentEngine(engine);
+}
+
+/** Existing explicit group names a connection of `engine` can join, in display order. */
+export function schemaGroupNames(
+  connections: readonly ConnectionProfile[],
+  engine: ConnectionProfile["engine"],
+): string[] {
+  const names = new Map<string, string>();
+  for (const connection of connections) {
+    const label = schemaGroupLabel(connection);
+    if (!label || connection.engine !== engine) continue;
+    const key = label.toLocaleLowerCase();
+    if (!names.has(key)) names.set(key, label);
+  }
+  return [...names.values()].sort((a, b) => a.localeCompare(b));
 }
 
 export function schemaGroupIsCompatible(group: SchemaConnectionGroup): boolean {

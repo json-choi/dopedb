@@ -1,5 +1,5 @@
 // Presents the team-connection rows of the General tab: transport security the team
-// connection or its provider owns, schema group labels, and this member's credential
+// connection or its provider owns and this member's credential
 // state with its binding command. Values a member binding or a provider integration
 // owns are shown read-only rather than edited here.
 import { Button } from "../../design-system/components/Button";
@@ -91,23 +91,6 @@ export function ConnectionTeamFields({
           </SelectInput>
         </PropertyRow>
       )}
-      {!isMongo ? (
-        <PropertyRow
-          label={t("connections.schemaGroup")}
-          htmlFor="connection-template-schema-group"
-        >
-          <TextInput
-            id="connection-template-schema-group"
-            density="compact"
-            value={form.schemaGroup ?? ""}
-            disabled={!canEditConnection}
-            onChange={(event) =>
-              set("schemaGroup", event.target.value.trim() || null)
-            }
-            placeholder={t("connections.schemaGroupPlaceholder")}
-          />
-        </PropertyRow>
-      ) : null}
       {isCloudflareD1 ? null : form.credentialMode === "provisioned" ? (
         <PropertyRow label={t("directAccess.editor.accountLabel")}>
           <StatusBadge tone="neutral">{t("directAccess.editor.accountBadge")}</StatusBadge>

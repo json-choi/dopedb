@@ -3,12 +3,14 @@
 import EngineMark from "../../components/EngineMark";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import type { PendingSchemaGroupChange } from "../../features/catalogExplorer/useSchemaGroupDrag";
+import type { useSchemaGroupEditor } from "../../features/catalogExplorer/useSchemaGroupEditor";
 import { EnvironmentSetupDialog } from "../../features/knowledge/components/EnvironmentSetupDialog";
 import type { KnowledgeProject } from "../../features/knowledge/domain";
 import type { WorkspaceDialogState } from "../../features/catalogExplorer/domain";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import WorkspaceConnectionDialog from "../../features/workspaces/components/WorkspaceConnectionDialog";
 import { useI18n } from "../../lib/i18n";
+import SchemaGroupDialog from "./SchemaGroupDialog";
 
 interface DatabaseExplorerOverlaysProps {
   catalogScopeKey: string;
@@ -24,6 +26,7 @@ interface DatabaseExplorerOverlaysProps {
   orderAnnouncement: { id: number; message: string } | null;
   connections: ConnectionProfile[];
   pendingGroupChange: PendingSchemaGroupChange | null;
+  schemaGroupEditor: ReturnType<typeof useSchemaGroupEditor>;
   workspaceDialog: WorkspaceDialogState | null;
   onProjectCreated: (project: KnowledgeProject) => void;
   onEnvironmentCreated: (project: KnowledgeProject) => void;
@@ -44,6 +47,7 @@ export function DatabaseExplorerOverlays({
   orderAnnouncement,
   connections,
   pendingGroupChange,
+  schemaGroupEditor,
   workspaceDialog,
   onProjectCreated,
   onEnvironmentCreated,
@@ -136,6 +140,16 @@ export function DatabaseExplorerOverlays({
           confirmVariant="primary"
           onCancel={onCancelGroupChange}
           onConfirm={onConfirmGroupChange}
+        />
+      ) : null}
+      {schemaGroupEditor.target ? (
+        <SchemaGroupDialog
+          target={schemaGroupEditor.target}
+          connections={connections}
+          saving={schemaGroupEditor.saving}
+          onSave={schemaGroupEditor.save}
+          onRemove={schemaGroupEditor.remove}
+          onClose={schemaGroupEditor.close}
         />
       ) : null}
       {workspaceDialog ? (

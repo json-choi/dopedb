@@ -5,20 +5,17 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { analysisQueryKeys } from "../../features/analysisArticles/queryKeys";
 import { listAnalysisArticles } from "../../features/analysisArticles/tauriAdapter";
+import { readWithCatalogIssue, retryTransientCatalogIssue } from "../../features/catalogExplorer/catalogDomain";
 import {
-  readWithCatalogIssue,
-  retryTransientCatalogIssue,
-} from "../../features/catalogExplorer/catalogDomain";
+  environmentConnectionsQuery,
+  projectScopeEnabled,
+} from "../../features/catalogExplorer/useSchemaComparisonGroups";
 import { projectResourceKey } from "../../features/catalogExplorer/projectResources";
 import type {
   EnvironmentConnection,
   KnowledgeEnvironmentView,
 } from "../../features/knowledge/domain";
 import { knowledgeInventoryQuery } from "../../features/knowledge/inventory";
-import { knowledgeQueryKeys } from "../../features/knowledge/queryKeys";
-import {
-  listKnowledgeEnvironmentConnections,
-} from "../../features/knowledge/tauriAdapter";
 import {
   sharedWorkspaceScopeAvailable,
   type CatalogScope,
@@ -36,10 +33,7 @@ export function useDatabaseExplorerKnowledge({
   activeEnvironmentView: KnowledgeEnvironmentView | null;
 }) {
   useWorkspaceResourceQueryRecovery(catalogScope.key, catalogScope.ready);
-  const enabled =
-    catalogScope.ready &&
-    (catalogScope.workspaceKind === "personal" ||
-      catalogScope.accountScope !== null);
+  const enabled = projectScopeEnabled(catalogScope);
   const sharedWorkspace = enabled && sharedWorkspaceScopeAvailable(catalogScope);
   const inventoryQuery = knowledgeInventoryQuery(catalogScope.key, enabled);
   const projects = useQuery({
@@ -72,18 +66,9 @@ export function useDatabaseExplorerKnowledge({
   const activeProjectId = activeEnvironmentId
     ? projectIdByEnvironmentId.get(activeEnvironmentId) ?? null
     : null;
-  const environmentConnections = useQuery({
-    queryKey: knowledgeQueryKeys.environmentConnections(
-      undefined,
-      catalogScope.key,
-    ),
-    queryFn: () => readWithCatalogIssue(
-      () => listKnowledgeEnvironmentConnections(),
-    ),
-    enabled,
-    retry: retryTransientCatalogIssue,
-    staleTime: 60_000,
-  });
+  const environmentConnections = useQuery(
+    environmentConnectionsQuery(catalogScope.key, enabled),
+  );
   const environmentConnectionsPhase = queryResultPhase(
     environmentConnections.data,
     environmentConnections.error,

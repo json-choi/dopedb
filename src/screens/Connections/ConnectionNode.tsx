@@ -126,6 +126,8 @@ type Props = {
   onUnbind?: () => void;
   unbinding?: boolean;
   onOpenSchemaDiff?: () => void;
+  /** Opens the explicit schema comparison group dialog for a local connection. */
+  onEditSchemaGroup?: () => void;
   onOpenTable: (table: CatalogTable) => void;
   onRequestOverview: (database: string) => void;
   onForgetOverview: (database: string) => void;
@@ -618,6 +620,16 @@ export default function ConnectionNode(props: Props) {
                   }}
                 >
                   {t("schemaDiff.open")}
+                </MenuItem>
+              ) : null}
+              {props.onEditSchemaGroup ? (
+                <MenuItem
+                  onClick={() => {
+                    props.onOpenMenu(null);
+                    props.onEditSchemaGroup?.();
+                  }}
+                >
+                  {t("connections.schemaGroupEdit")}
                 </MenuItem>
               ) : null}
               <MenuCheckbox

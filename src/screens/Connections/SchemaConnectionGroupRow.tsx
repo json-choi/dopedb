@@ -1,21 +1,15 @@
-// Presents a schema group's compatibility and catalog-difference summary with its row actions.
-// Counts compare the member-chosen baseline against the shared live snapshots, exactly
-// as the Schema Diff screen does; comparisons are memoized per snapshot pair.
+// Presents an explicit schema group's header with its comparison summary and edit menu,
+// then its member connections. Counts compare the member-chosen baseline against the
+// shared live snapshots exactly as the Schema Diff screen does.
 
 import type { ReactNode } from "react";
 
 import EngineMark from "../../components/EngineMark";
-import { Icon } from "../../components/Icon";
-import { Button } from "../../design-system/components/Button";
+import { MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import type { Catalog } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
-import {
-  compareCatalogs,
-  defaultSchemaBaseline,
-  diffCounts,
-  schemaGroupIsCompatible,
-  type SchemaConnectionGroup,
-} from "../../lib/schemaDiff";
+import type { SchemaConnectionGroup } from "../../lib/schemaDiff";
+import { SchemaGroupCompareButton } from "./schemaDiffPresentation";
 
 type Props = {
   group: SchemaConnectionGroup;
@@ -24,6 +18,8 @@ type Props = {
   catalogs: Record<string, Catalog>;
   onEnsureLoaded: (connectionId: string) => void;
   onOpenSchemaDiff: (group: SchemaConnectionGroup) => void;
+  /** Absent when a member is a team connection, whose group the editor owns. */
+  onEditGroup?: (group: SchemaConnectionGroup) => void;
   renderConnection: (
     connection: SchemaConnectionGroup["connections"][number],
     treeParentKey: string,
@@ -37,41 +33,12 @@ export function SchemaConnectionGroupRow({
   catalogs,
   onEnsureLoaded,
   onOpenSchemaDiff,
+  onEditGroup,
   renderConnection,
 }: Props) {
   const { t } = useI18n();
   const engine = group.connections[0]?.engine;
-  const baseline = defaultSchemaBaseline(group);
-  const baselineCatalog = baseline ? catalogs[baseline.id] : undefined;
-  const targets = group.connections.filter(
-    (connection) => connection.id !== baseline?.id,
-  );
-  const diffs = baselineCatalog
-    ? targets.flatMap((connection) => {
-        const catalog = catalogs[connection.id];
-        return catalog ? [compareCatalogs(catalog, baselineCatalog)] : [];
-      })
-    : [];
-  const complete = targets.length > 0 && diffs.length === targets.length;
-  const counts = diffs.reduce(
-    (total, diff) => {
-      const current = diffCounts(diff);
-      total.added += current.added;
-      total.missing += current.missing;
-      total.changed += current.changed;
-      return total;
-    },
-    { added: 0, missing: 0, changed: 0 },
-  );
-  const total = counts.added + counts.missing + counts.changed;
   const treeKey = `schema-group:${group.key}`;
-  const summary = !schemaGroupIsCompatible(group)
-    ? t("schemaDiff.incompatibleTitle")
-    : complete && total === 0
-      ? t("schemaDiff.inSync")
-      : complete
-        ? t("connections.schemaDiffTitle", counts)
-        : t("schemaDiff.openTitle");
 
   return (
     <div
@@ -94,41 +61,25 @@ export function SchemaConnectionGroupRow({
         <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:font-bold tw:text-foreground">
           {group.label}
         </span>
-        <Button
-          size="tree"
-          title={summary}
-          aria-label={summary === t("schemaDiff.openTitle")
-            ? summary
-            : t("schemaDiff.openSummary", { summary })}
-          data-tree-primary-action
-          tabIndex={-1}
-          onClick={() => {
-            for (const connection of group.connections) {
-              onEnsureLoaded(connection.id);
-            }
-            onOpenSchemaDiff(group);
-          }}
-        >
-          {!schemaGroupIsCompatible(group) ? (
-            <Icon name="alert" />
-          ) : complete && total === 0 ? (
-            <Icon name="check" />
-          ) : complete ? (
-            <span className="tw:inline-flex tw:gap-[2px] tw:font-mono tw:[font-variant-numeric:tabular-nums]">
-              {counts.added > 0 ? (
-                <span className="tw:text-success">+{counts.added}</span>
-              ) : null}
-              {counts.missing > 0 ? (
-                <span className="tw:text-danger">−{counts.missing}</span>
-              ) : null}
-              {counts.changed > 0 ? (
-                <span className="tw:text-warning">~{counts.changed}</span>
-              ) : null}
-            </span>
-          ) : (
-            <span>{t("schemaDiff.open")}</span>
-          )}
-        </Button>
+        <SchemaGroupCompareButton
+          group={group}
+          catalogs={catalogs}
+          primaryAction
+          onEnsureLoaded={onEnsureLoaded}
+          onOpen={onOpenSchemaDiff}
+        />
+        {onEditGroup ? (
+          <ToolbarMenu
+            icon="moreVertical"
+            label={t("connections.schemaGroupMenu", { group: group.label })}
+            triggerVariant="treeAction"
+            triggerTabIndex={-1}
+          >
+            <MenuItem onClick={() => onEditGroup(group)}>
+              {t("connections.schemaGroupEditGroup")}
+            </MenuItem>
+          </ToolbarMenu>
+        ) : null}
       </div>
       {group.connections.map((connection) =>
         renderConnection(connection, treeKey),
