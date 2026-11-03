@@ -298,7 +298,9 @@ jobs:
 
   windows-check:
     runs-on: windows-latest
-    timeout-minutes: 15
+    # The Rust cache step never saves here, so every run compiles cold and can pass
+    # 15 minutes; leave room for that instead of cancelling a healthy run.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
