@@ -107,7 +107,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.cloudflareD1AccountHint":
       "Wrangler opens Cloudflare in your browser. DopeDB never asks for or stores an API token.",
     "connections.cloudflareD1WranglerRequired":
-      "Install Wrangler 4 or later to connect a Cloudflare account.",
+      "Connecting a Cloudflare account needs Wrangler 4 or later. Run `npm i -g wrangler` in a terminal, then try again.",
     "connections.cloudflareD1AccountsLoading": "Loading accounts…",
     "connections.cloudflareD1DatabasesLoading": "Loading D1 databases…",
     "connections.cloudflareD1NoAccounts": "No accessible accounts found.",
@@ -759,7 +759,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.cloudflareD1AccountHint":
       "Wrangler가 브라우저에서 Cloudflare 로그인을 엽니다. DopeDB는 API 토큰을 요청하거나 저장하지 않습니다.",
     "connections.cloudflareD1WranglerRequired":
-      "Cloudflare 계정 연결에는 Wrangler 4 이상이 필요합니다.",
+      "Cloudflare 계정 연결에는 Wrangler 4 이상이 필요합니다. 터미널에서 `npm i -g wrangler`를 실행한 뒤 다시 시도하세요.",
     "connections.cloudflareD1AccountsLoading": "계정 불러오는 중…",
     "connections.cloudflareD1DatabasesLoading": "D1 데이터베이스 불러오는 중…",
     "connections.cloudflareD1NoAccounts": "접근 가능한 계정이 없습니다.",

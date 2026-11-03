@@ -40,31 +40,42 @@ struct BridgeRequest<'a> {
 }
 
 pub(super) fn runtime_candidates_exist() -> bool {
-    node_candidates().iter().any(|path| regular_file(path))
-        && wrangler_entrypoint_candidates()
-            .iter()
-            .any(|path| valid_wrangler_entrypoint(path) && regular_file(path))
+    installation_candidates().iter().any(|candidate| {
+        regular_file(&candidate.node)
+            && regular_file(&candidate.entrypoint)
+            && candidate
+                .entrypoint
+                .canonicalize()
+                .is_ok_and(|path| valid_wrangler_entrypoint(&path))
+    })
 }
 
+/// Picks the first Node.js whose own global npm packages contain Wrangler, so the
+/// runtime is exactly what `npm i -g wrangler` installed with that Node.js.
 pub(super) async fn discover_runtime() -> AppResult<WranglerRuntime> {
-    let node = discover(&node_candidates(), |path| {
-        path.file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| matches!(name, "node" | "node.exe"))
-    })
-    .await
-    .ok_or_else(|| {
-        AppError::Config("Node.js is required to run the official Wrangler CLI".into())
-    })?;
-    let entrypoint = discover(&wrangler_entrypoint_candidates(), valid_wrangler_entrypoint)
-        .await
-        .ok_or_else(|| {
-            AppError::Config(
-                "Cloudflare Wrangler is not installed; install Wrangler 4 or later and retry"
-                    .into(),
-            )
-        })?;
-    Ok(WranglerRuntime { node, entrypoint })
+    let candidates = installation_candidates();
+    for candidate in &candidates {
+        let Some(node) = identify(&candidate.node, is_node_executable).await else {
+            continue;
+        };
+        let Some(entrypoint) = identify(&candidate.entrypoint, valid_wrangler_entrypoint).await
+        else {
+            continue;
+        };
+        return Ok(WranglerRuntime { node, entrypoint });
+    }
+    if candidates
+        .iter()
+        .any(|candidate| regular_file(&candidate.node))
+    {
+        Err(AppError::Config(
+            "Cloudflare Wrangler is not installed; run `npm i -g wrangler` and retry".into(),
+        ))
+    } else {
+        Err(AppError::Config(
+            "Node.js is required to run the official Wrangler CLI; install Node.js, then run `npm i -g wrangler`".into(),
+        ))
+    }
 }
 
 pub(super) async fn run_json(
@@ -200,26 +211,20 @@ impl ExecutableIdentity {
     }
 }
 
-async fn discover(
-    candidates: &[PathBuf],
+async fn identify(
+    candidate: &Path,
     validate: impl Fn(&Path) -> bool,
 ) -> Option<ExecutableIdentity> {
-    for candidate in candidates {
-        let Ok(path) = tokio::fs::canonicalize(candidate).await else {
-            continue;
-        };
-        if !validate(&path) {
-            continue;
-        }
-        if let Ok((sha256, length)) = hash_regular_file(&path).await {
-            return Some(ExecutableIdentity {
-                path,
-                sha256,
-                length,
-            });
-        }
+    let path = tokio::fs::canonicalize(candidate).await.ok()?;
+    if !validate(&path) {
+        return None;
     }
-    None
+    let (sha256, length) = hash_regular_file(&path).await.ok()?;
+    Some(ExecutableIdentity {
+        path,
+        sha256,
+        length,
+    })
 }
 
 async fn hash_regular_file(path: &Path) -> AppResult<(String, u64)> {
@@ -324,51 +329,147 @@ fn regular_file(path: &Path) -> bool {
         })
 }
 
-fn node_candidates() -> Vec<PathBuf> {
-    let mut candidates = vec![
-        PathBuf::from("/opt/homebrew/bin/node"),
-        PathBuf::from("/usr/local/bin/node"),
-        PathBuf::from("/usr/bin/node"),
-    ];
-    if let Ok(home) = crate::app_paths::home_dir() {
-        candidates.push(home.join(".volta/bin/node"));
-        candidates.push(home.join(".local/bin/node"));
-    }
-    #[cfg(windows)]
-    if let Some(program_files) = std::env::var_os("ProgramFiles") {
-        candidates.push(PathBuf::from(program_files).join("nodejs/node.exe"));
-    }
-    candidates
+fn is_node_executable(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| matches!(name, "node" | "node.exe"))
 }
 
-fn wrangler_candidates() -> Vec<PathBuf> {
-    let mut candidates = vec![
-        PathBuf::from("/opt/homebrew/bin/wrangler"),
-        PathBuf::from("/usr/local/bin/wrangler"),
-        PathBuf::from("/usr/bin/wrangler"),
-    ];
-    if let Ok(home) = crate::app_paths::home_dir() {
-        candidates.push(home.join(".volta/bin/wrangler"));
-        candidates.push(home.join(".local/bin/wrangler"));
-    }
-    #[cfg(windows)]
-    if let Some(app_data) = std::env::var_os("APPDATA") {
-        candidates.push(PathBuf::from(app_data).join("npm/node_modules/wrangler/bin/wrangler.js"));
-    }
-    candidates
+/// A Node.js executable paired with the Wrangler entrypoint its npm installs globally.
+#[derive(Debug, PartialEq, Eq)]
+struct InstallationCandidate {
+    node: PathBuf,
+    entrypoint: PathBuf,
 }
 
-fn wrangler_entrypoint_candidates() -> Vec<PathBuf> {
-    wrangler_candidates()
+fn installation_candidates() -> Vec<InstallationCandidate> {
+    let home = crate::app_paths::home_dir().ok();
+    #[cfg(windows)]
+    let windows = WindowsRoots {
+        app_data: std::env::var_os("APPDATA").map(PathBuf::from),
+        program_files: std::env::var_os("ProgramFiles").map(PathBuf::from),
+    };
+    #[cfg(not(windows))]
+    let windows = WindowsRoots::default();
+    installation_candidates_in(home.as_deref(), &windows)
+}
+
+#[derive(Default)]
+struct WindowsRoots {
+    app_data: Option<PathBuf>,
+    program_files: Option<PathBuf>,
+}
+
+/// Every place `npm i -g wrangler` lands for the common ways Node.js is installed:
+/// a system or Homebrew Node.js, the version managers (mise, nvm, fnm, asdf, Volta),
+/// a user `prefix=` in `~/.npmrc`, and the Windows installer's `%APPDATA%\npm`.
+fn installation_candidates_in(
+    home: Option<&Path>,
+    windows: &WindowsRoots,
+) -> Vec<InstallationCandidate> {
+    let mut node_bins: Vec<PathBuf> = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"]
         .into_iter()
-        .filter_map(|candidate| candidate.canonicalize().ok())
-        .filter_map(|wrapper| {
-            wrapper
-                .parent()?
-                .parent()
-                .map(|root| root.join("wrangler-dist/cli.js"))
+        .map(PathBuf::from)
+        .collect();
+    if let Some(home) = home {
+        for (root, suffix) in [
+            (home.join(".local/share/mise/installs/node"), "bin"),
+            (home.join(".nvm/versions/node"), "bin"),
+            (
+                home.join(".local/share/fnm/node-versions"),
+                "installation/bin",
+            ),
+            (
+                home.join("Library/Application Support/fnm/node-versions"),
+                "installation/bin",
+            ),
+            (home.join(".asdf/installs/nodejs"), "bin"),
+            (home.join(".volta/tools/image/node"), "bin"),
+        ] {
+            node_bins.extend(
+                newest_first(&root)
+                    .into_iter()
+                    .map(|version| version.join(suffix)),
+            );
+        }
+    }
+
+    let mut candidates = Vec::new();
+    let mut push = |node: PathBuf, package_root: PathBuf| {
+        let candidate = InstallationCandidate {
+            node,
+            entrypoint: package_root.join("wrangler/wrangler-dist/cli.js"),
+        };
+        if !candidates.contains(&candidate) {
+            candidates.push(candidate);
+        }
+    };
+    // A user-level npm prefix wins, paired with every Node.js that could have used it.
+    if let Some(prefix) = home.and_then(npmrc_prefix) {
+        for bin in &node_bins {
+            push(bin.join("node"), prefix.join("lib/node_modules"));
+        }
+    }
+    // Otherwise npm installs globally beside the Node.js that runs it.
+    for bin in &node_bins {
+        if let Some(prefix) = bin.parent() {
+            push(bin.join("node"), prefix.join("lib/node_modules"));
+        }
+    }
+    // Volta keeps global packages apart from its Node.js images.
+    if let Some(home) = home {
+        let package = home.join(".volta/tools/image/packages/wrangler/lib/node_modules");
+        for bin in &node_bins {
+            push(bin.join("node"), package.clone());
+        }
+    }
+    if let Some(program_files) = &windows.program_files {
+        let node_dir = program_files.join("nodejs");
+        if let Some(app_data) = &windows.app_data {
+            push(node_dir.join("node.exe"), app_data.join("npm/node_modules"));
+        }
+        // nvm-windows points the global prefix at its Node.js symlink directory.
+        push(node_dir.join("node.exe"), node_dir.join("node_modules"));
+    }
+    candidates
+}
+
+/// Version directories under a version manager root, newest first.
+fn newest_first(root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut versions: Vec<(Option<semver::Version>, PathBuf)> = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .map(|path| {
+            let version = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .and_then(|name| semver::Version::parse(name.trim_start_matches('v')).ok());
+            (version, path)
         })
-        .collect()
+        .collect();
+    versions.sort_by(|left, right| right.0.cmp(&left.0));
+    versions.into_iter().map(|(_, path)| path).collect()
+}
+
+/// The `prefix=` an npm user configured in `~/.npmrc`, when it is an absolute path.
+fn npmrc_prefix(home: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(home.join(".npmrc")).ok()?;
+    text.lines().find_map(|line| {
+        let (key, value) = line.split_once('=')?;
+        if key.trim() != "prefix" {
+            return None;
+        }
+        let value = value.trim().trim_matches('"');
+        let path = match value.strip_prefix("~/") {
+            Some(rest) => home.join(rest),
+            None => PathBuf::from(value),
+        };
+        path.is_absolute().then_some(path)
+    })
 }
 
 fn safe_path() -> &'static str {
