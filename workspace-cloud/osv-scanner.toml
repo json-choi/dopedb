@@ -17,3 +17,13 @@ reason = "Requires the OAuth Proxy plugin; workspace-cloud/lib/auth.ts never ena
 id = "GHSA-44jh-23m7-hpcf"
 ignoreUntil = 2026-11-30
 reason = "Affects database-backed rate limiting on PostgreSQL only; Workspace Cloud stores rate-limit records through the Drizzle sqlite provider on Cloudflare D1."
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = 2026-12-04
+reason = "glob 9.3.5 and 12.0.0 are build-time dependencies of the OpenNext Cloudflare CLI, which globs fixed build-output paths without an AbortSignal and never ships glob in the Worker bundle; the advisory needs a caller that relies on signal cancellation to bound traversal. The fix exists only in glob 14."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2026-12-04
+reason = "minimatch 8.0.7 and 10.2.6 are reached only through the OpenNext Cloudflare CLI's glob over fixed build-output patterns at the default optimizationLevel 1; the amplification needs attacker-controlled patterns at optimizationLevel >= 2. The fix exists only in minimatch 11."

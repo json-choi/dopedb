@@ -110,7 +110,9 @@ impl ExportSink {
                 });
             }
             let mut workbook = Workbook::new();
-            workbook.add_worksheet_with_constant_memory();
+            workbook
+                .add_worksheet_with_constant_memory()
+                .map_err(xlsx_error)?;
             let file = open_output_file(path, false, false)?;
             let mut sink = Self::Xlsx {
                 workbook: Box::new(workbook),
@@ -263,7 +265,9 @@ impl ExportSink {
             } => {
                 for values in rows {
                     if *row >= XLSX_MAX_ROWS {
-                        workbook.add_worksheet_with_constant_memory();
+                        workbook
+                            .add_worksheet_with_constant_memory()
+                            .map_err(xlsx_error)?;
                         *sheet_index += 1;
                         *row = 0;
                         let worksheet = workbook

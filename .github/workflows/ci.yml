@@ -72,11 +72,17 @@ jobs:
           node-version: 24
           cache: pnpm
           cache-dependency-path: site/pnpm-lock.yaml
+      # Pillow's PNG/ICO bytes depend on its bundled codecs, so pin the interpreter
+      # that has a prebuilt Pillow 12.2.0 wheel instead of the runner's default python3.
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        id: brand_python
+        with:
+          python-version: "3.13"
       - name: Install deterministic image tooling
         run: |
           pnpm --dir site install --frozen-lockfile
-          python3 -m venv "$RUNNER_TEMP/dopedb-brand-venv"
-          "$RUNNER_TEMP/dopedb-brand-venv/bin/pip" install Pillow==12.2.0
+          "${{ steps.brand_python.outputs.python-path }}" -m venv "$RUNNER_TEMP/dopedb-brand-venv"
+          "$RUNNER_TEMP/dopedb-brand-venv/bin/pip" install --only-binary=:all: Pillow==12.2.0
       - name: Check all generated brand assets
         run: '"$RUNNER_TEMP/dopedb-brand-venv/bin/python" scripts/generate-icons.py --check'
 
