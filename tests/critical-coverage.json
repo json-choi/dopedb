@@ -57,6 +57,10 @@
       },
       "src-tauri/src/safety/l3_preview.rs": {
         "explain": "Issues engine-specific EXPLAIN statements against a live Postgres, MySQL, BigQuery, or Cloudflare D1 target"
+      },
+      "src-tauri/src/store/repositories/analysis_articles.rs": {
+        "save_analysis_article_local_result": "Fetches the result-cache key from the OS keychain (a home-directory dev-secrets file in debug builds) before encrypting",
+        "load_analysis_article_local_result": "Fetches the result-cache key from the OS keychain (a home-directory dev-secrets file in debug builds) before decrypting"
       }
     }
   },
