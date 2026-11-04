@@ -197,7 +197,13 @@ mod tests {
             (PRODUCTION_APP_IDENTIFIER, "dopedb"),
             (DEVELOPMENT_APP_IDENTIFIER, "dopedb-dev"),
         ] {
-            let path = runtime_file_for_identifier(identifier).unwrap();
+            // Resolution reads only the OS data-directory path and writes nothing;
+            // a host without one fails closed instead of guessing a location.
+            let path = match runtime_file_for_identifier(identifier) {
+                Ok(path) => path,
+                Err(_) if dirs::data_dir().is_none() => continue,
+                Err(error) => panic!("{identifier} must resolve a runtime namespace: {error:?}"),
+            };
             let expected = Path::new(directory)
                 .join(RUNTIME_DIRECTORY_NAME)
                 .join(RUNTIME_FILE_NAME);

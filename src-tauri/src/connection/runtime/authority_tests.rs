@@ -448,3 +448,419 @@ fn resolved_credentials_cannot_change_identity_scope_or_transport_security() {
         "Cloud SQL without server verification must be refused"
     );
 }
+
+/// Remote authority double: records every call and never reaches a network.
+struct FakeAuthority {
+    revision: i64,
+    target: Option<ProviderLocalTarget>,
+    lease_profile: Option<ConnectionProfile>,
+    lease_proxy: bool,
+    authorize_calls: std::sync::atomic::AtomicUsize,
+    lease_calls: std::sync::atomic::AtomicUsize,
+    release_calls: std::sync::atomic::AtomicUsize,
+}
+
+impl FakeAuthority {
+    fn new(revision: i64) -> Self {
+        Self {
+            revision,
+            target: None,
+            lease_profile: None,
+            lease_proxy: false,
+            authorize_calls: Default::default(),
+            lease_calls: Default::default(),
+            release_calls: Default::default(),
+        }
+    }
+
+    fn count(counter: &std::sync::atomic::AtomicUsize) -> usize {
+        counter.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl RemoteConnectionAuthorityPort for FakeAuthority {
+    fn authorize<'a>(
+        &'a self,
+        _account_id: &'a AccountId,
+        _workspace_id: WorkspaceId,
+        _connection_id: ConnectionId,
+        _access: ConnectionAccess,
+    ) -> crate::connection::RemoteAuthorityFuture<'a, crate::connection::RemoteConnectionAuthority>
+    {
+        self.authorize_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let revision = self.revision;
+        Box::pin(async move { Ok(crate::connection::RemoteConnectionAuthority { revision }) })
+    }
+
+    fn issue_managed_lease<'a>(
+        &'a self,
+        _account_id: &'a AccountId,
+        _workspace_id: WorkspaceId,
+        _profile: &'a ConnectionProfile,
+        _access: ConnectionAccess,
+    ) -> crate::connection::RemoteAuthorityFuture<'a, crate::connection::ManagedConnectionLease>
+    {
+        self.lease_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let profile = self.lease_profile.clone();
+        let proxy = self.lease_proxy;
+        Box::pin(async move {
+            Ok(crate::connection::ManagedConnectionLease {
+                lease_id: Uuid::new_v4(),
+                profile: profile.expect("lease profile"),
+                secret: Zeroizing::new("lease-secret".into()),
+                valid_for: Duration::from_secs(600),
+                cloud_sql_proxy: proxy.then(|| cloud_sql_proxy::CloudSqlProxyConfig {
+                    instance_connection_name: "project:region:instance".into(),
+                    access_token: Zeroizing::new("token".into()),
+                    network_mode: GcpCloudSqlNetworkMode::Public,
+                }),
+            })
+        })
+    }
+
+    fn release_managed_lease<'a>(
+        &'a self,
+        _account_id: &'a AccountId,
+        _workspace_id: WorkspaceId,
+        _connection_id: ConnectionId,
+        _lease_id: Uuid,
+    ) -> crate::connection::RemoteAuthorityFuture<'a, ()> {
+        self.release_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Box::pin(async { Ok(()) })
+    }
+
+    fn provider_local_target<'a>(
+        &'a self,
+        _account_id: &'a AccountId,
+        _workspace_id: WorkspaceId,
+        _connection_id: ConnectionId,
+    ) -> crate::connection::RemoteAuthorityFuture<'a, ProviderLocalTarget> {
+        let target = self.target.clone();
+        Box::pin(async move {
+            target.ok_or_else(|| AppError::Network("no provider-local target".into()))
+        })
+    }
+}
+
+/// Provider-local double that returns a fixed binding and never resolves a secret.
+struct FakeBinding(Option<crate::connection::provider_local::ProviderLocalBindingPin>);
+
+impl ProviderLocalConnectionPort for FakeBinding {
+    fn authorize_binding<'a>(
+        &'a self,
+        _request: ProviderLocalPinRequest<'a>,
+    ) -> crate::connection::provider_local::ProviderLocalFuture<
+        'a,
+        crate::connection::provider_local::ProviderLocalBindingPin,
+    > {
+        let binding = self.0.clone();
+        Box::pin(async move {
+            binding.ok_or_else(|| AppError::Blocked {
+                reason: "no binding".into(),
+            })
+        })
+    }
+
+    fn resolve<'a>(
+        &'a self,
+        _request: ProviderLocalResolveRequest<'a>,
+    ) -> crate::connection::provider_local::ProviderLocalFuture<
+        'a,
+        crate::connection::provider_local::ResolvedProviderLocalConnection,
+    > {
+        Box::pin(async { Err(AppError::Network("resolution is outside this test".into())) })
+    }
+}
+
+fn local_sqlite_pin() -> PinnedConnection {
+    let mut pin = neon_pin();
+    pin.profile.engine = Engine::Sqlite;
+    pin.profile.provider = Provider::Auto;
+    pin.profile.database = ":memory:".into();
+    pin.profile.sslmode = "disable".into();
+    pin.profile.workspace_access = WorkspaceConnectionAccess::Local;
+    pin.profile.credential_mode = WorkspaceCredentialMode::Local;
+    pin.requires_remote_rbac = false;
+    pin
+}
+
+#[tokio::test]
+async fn authorization_and_pool_opening_fail_closed_before_any_live_connection() {
+    fn blocked(result: AppResult<ConnectionAuthorization>) -> String {
+        match result {
+            Err(AppError::Blocked { reason }) => reason,
+            Err(other) => panic!("expected a blocked decision, got {other:?}"),
+            Ok(_) => panic!("expected a blocked decision, got authorization"),
+        }
+    }
+    let no_binding = FakeBinding(None);
+
+    // Local checks refuse before the remote authority is ever asked.
+    let authority = FakeAuthority::new(11);
+    let mut provisioned = neon_pin();
+    provisioned.profile.credential_mode = WorkspaceCredentialMode::Provisioned;
+    provisioned.profile.username.clear();
+    assert!(blocked(
+        authorize_pin(
+            &authority,
+            &no_binding,
+            &provisioned,
+            ConnectionAccess::Read
+        )
+        .await
+    )
+    .contains("not ready"));
+    let member = neon_pin();
+    assert!(blocked(
+        authorize_pin(&authority, &no_binding, &member, ConnectionAccess::Schema).await
+    )
+    .contains("managed credentials"));
+
+    type RoleCase = (
+        &'static str,
+        WorkspaceConnectionAccess,
+        bool,
+        ConnectionAccess,
+        bool,
+    );
+    let roles: [RoleCase; 7] = [
+        (
+            "view grant reads",
+            WorkspaceConnectionAccess::View,
+            true,
+            ConnectionAccess::Read,
+            false,
+        ),
+        (
+            "read grant writes",
+            WorkspaceConnectionAccess::Read,
+            true,
+            ConnectionAccess::Write,
+            false,
+        ),
+        (
+            "write grant with writes disabled",
+            WorkspaceConnectionAccess::Write,
+            false,
+            ConnectionAccess::Write,
+            false,
+        ),
+        (
+            "write grant changes schema",
+            WorkspaceConnectionAccess::Write,
+            true,
+            ConnectionAccess::Schema,
+            false,
+        ),
+        (
+            "read grant reads",
+            WorkspaceConnectionAccess::Read,
+            false,
+            ConnectionAccess::Read,
+            true,
+        ),
+        (
+            "write grant writes",
+            WorkspaceConnectionAccess::Write,
+            true,
+            ConnectionAccess::Write,
+            true,
+        ),
+        (
+            "manage grant changes schema",
+            WorkspaceConnectionAccess::Manage,
+            true,
+            ConnectionAccess::Schema,
+            true,
+        ),
+    ];
+    for (label, grant, allow_writes, access, allowed) in roles {
+        let mut pin = neon_pin();
+        // Managed credentials keep the schema path open to the role gate itself.
+        pin.profile.credential_mode = WorkspaceCredentialMode::Managed;
+        pin.profile.workspace_access = grant;
+        pin.profile.allow_writes = allow_writes;
+        pin.requires_remote_rbac = false;
+        let result = authorize_pin(&authority, &no_binding, &pin, access).await;
+        assert_eq!(result.is_ok(), allowed, "{label}");
+        if !allowed {
+            assert!(blocked(result).contains("workspace role"), "{label}");
+        }
+    }
+    assert_eq!(FakeAuthority::count(&authority.authorize_calls), 0);
+
+    // A local connection is authorized without any remote identity.
+    let local = authorize_pin(
+        &authority,
+        &no_binding,
+        &local_sqlite_pin(),
+        ConnectionAccess::Read,
+    )
+    .await
+    .unwrap();
+    assert!(local.user_id.is_none() && local.workspace_id.is_none());
+    assert!(local.provider_local_target.is_none() && local.provider_local_pin.is_none());
+
+    // Shared access needs an active account and the exact current revision.
+    let mut writer = neon_pin();
+    writer.profile.workspace_access = WorkspaceConnectionAccess::Write;
+    writer.profile.allow_writes = true;
+    assert!(matches!(
+        authorize_pin(&authority, &no_binding, &writer, ConnectionAccess::Write).await,
+        Err(AppError::Config(_))
+    ));
+    assert_eq!(FakeAuthority::count(&authority.authorize_calls), 0);
+    writer.scope.selected_account_id = Some("member-account-1".into());
+    let stale = FakeAuthority::new(writer.connection_revision + 1);
+    assert!(matches!(
+        authorize_pin(&stale, &no_binding, &writer, ConnectionAccess::Write).await,
+        Err(AppError::SharedConnectionChanged)
+    ));
+    let granted = authorize_pin(&authority, &no_binding, &writer, ConnectionAccess::Write)
+        .await
+        .unwrap();
+    assert_eq!(granted.user_id.as_deref(), Some("member-account-1"));
+    assert_eq!(granted.workspace_id, Some(writer.scope.workspace_id));
+    assert!(granted.provider_local_target.is_none());
+
+    // A member-local provider read is pinned to a binding for this exact account.
+    let mut reader = neon_pin();
+    reader.scope.selected_account_id = Some("member-account-1".into());
+    let account = AccountId::new("member-account-1").unwrap();
+    let workspace = WorkspaceId::from(reader.scope.workspace_id);
+    let mut provider = FakeAuthority::new(reader.connection_revision);
+    provider.target = Some(neon_target(&reader));
+    let target = provider.target.clone().unwrap();
+    let exact = FakeBinding(Some(binding_pin(&account, workspace, &target)));
+    let pinned = authorize_pin(&provider, &exact, &reader, ConnectionAccess::Read)
+        .await
+        .unwrap();
+    assert_eq!(pinned.provider_local_target, Some(target.clone()));
+    assert!(pinned.provider_local_pin.is_some());
+    let other_account = AccountId::new("member-account-2").unwrap();
+    let foreign = FakeBinding(Some(binding_pin(&other_account, workspace, &target)));
+    assert!(
+        blocked(authorize_pin(&provider, &foreign, &reader, ConnectionAccess::Read).await)
+            .contains("no longer authorized")
+    );
+    let mut wrong_target = neon_target(&reader);
+    wrong_target.connection_id = ConnectionId::from(Uuid::new_v4());
+    provider.target = Some(wrong_target);
+    assert!(
+        authorize_pin(&provider, &exact, &reader, ConnectionAccess::Read)
+            .await
+            .is_err()
+    );
+
+    // A provider-local target without its binding pin never opens a pool.
+    let local_pin = local_sqlite_pin();
+    let unbound = ConnectionAuthorization {
+        user_id: Some("member-account-1".into()),
+        workspace_id: Some(local_pin.scope.workspace_id),
+        provider_local_target: Some(target),
+        provider_local_pin: None,
+    };
+    let authority = Arc::new(FakeAuthority::new(11));
+    let resolver: Arc<dyn ProviderLocalConnectionPort> = Arc::new(FakeBinding(None));
+    let opened = connect_authorized(
+        authority.clone(),
+        resolver.clone(),
+        &local_pin,
+        &local_pin.profile,
+        &unbound,
+        ConnectionAccess::Read,
+    )
+    .await;
+    assert!(matches!(opened, Err(AppError::Blocked { .. })));
+
+    // A local profile opens without a deadline, lease, tunnel, or connector.
+    let opened = connect_authorized(
+        authority.clone(),
+        resolver.clone(),
+        &local_pin,
+        &local_pin.profile,
+        &local,
+        ConnectionAccess::Read,
+    )
+    .await
+    .unwrap();
+    assert!(opened.retire_at.is_none() && opened.managed_lease.is_none());
+    assert!(opened.ssh_tunnel.is_none() && opened.cloud_sql_proxy.is_none());
+    retire_opened(opened).await;
+
+    // Managed access needs a workspace account before any lease is issued.
+    let mut managed_profile = local_pin.profile.clone();
+    managed_profile.credential_mode = WorkspaceCredentialMode::Managed;
+    let mut lease_authority = FakeAuthority::new(11);
+    lease_authority.lease_profile = Some(local_pin.profile.clone());
+    let lease_authority = Arc::new(lease_authority);
+    assert!(matches!(
+        connect_authorized(
+            lease_authority.clone(),
+            resolver.clone(),
+            &local_pin,
+            &managed_profile,
+            &local,
+            ConnectionAccess::Read,
+        )
+        .await,
+        Err(AppError::Config(_))
+    ));
+    assert_eq!(FakeAuthority::count(&lease_authority.lease_calls), 0);
+
+    // A leased pool retires before the lease and returns the lease exactly once.
+    let account_scope = ConnectionAuthorization {
+        user_id: Some("member-account-1".into()),
+        workspace_id: Some(local_pin.scope.workspace_id),
+        provider_local_target: None,
+        provider_local_pin: None,
+    };
+    let started = Instant::now();
+    let opened = connect_authorized(
+        lease_authority.clone(),
+        resolver.clone(),
+        &local_pin,
+        &managed_profile,
+        &account_scope,
+        ConnectionAccess::Read,
+    )
+    .await
+    .unwrap();
+    let retire_at = opened.retire_at.expect("leased pool deadline");
+    assert!(retire_at <= started + Duration::from_secs(600 - 30) + Duration::from_secs(1));
+    assert!(opened.managed_lease.is_some());
+    retire_opened(opened).await;
+    assert_eq!(FakeAuthority::count(&lease_authority.release_calls), 1);
+
+    // A lease that asks for a Cloud SQL connector over an SSH alias is refused
+    // before any process starts, and the lease is still returned.
+    let mut tunneled = local_pin.profile.clone();
+    tunneled
+        .extra_params
+        .insert(ssh::SSH_ALIAS_PARAMETER.into(), "bastion".into());
+    let mut managed_tunneled = tunneled.clone();
+    managed_tunneled.credential_mode = WorkspaceCredentialMode::Managed;
+    let mut proxied = FakeAuthority::new(11);
+    proxied.lease_profile = Some(tunneled);
+    proxied.lease_proxy = true;
+    let proxied = Arc::new(proxied);
+    match connect_authorized(
+        proxied.clone(),
+        resolver,
+        &local_pin,
+        &managed_tunneled,
+        &account_scope,
+        ConnectionAccess::Read,
+    )
+    .await
+    {
+        Err(AppError::Config(reason)) => assert!(reason.contains("cannot also use an SSH tunnel")),
+        Err(other) => panic!("expected the SSH and connector conflict, got {other:?}"),
+        Ok(_) => panic!("expected the SSH and connector conflict, got a pool"),
+    }
+    assert_eq!(FakeAuthority::count(&proxied.lease_calls), 1);
+    assert_eq!(FakeAuthority::count(&proxied.release_calls), 1);
+}

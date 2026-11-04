@@ -270,10 +270,11 @@ increasing the count. Never raise
 [`tests/critical-test-budget.json`](tests/critical-test-budget.json) limits
 without an explicit user request. Run `pnpm check:test-budget` for test changes.
 [`tests/critical-coverage.json`](tests/critical-coverage.json) lists the
-security-boundary and wire-contract code and its target line coverage;
-`pnpm coverage:critical` measures only that list and needs `cargo-llvm-cov`.
-Functions that need a live database, network, keychain, or child process sit in
-`integrationOnly` with a reason and are verified by integration suites. Raise
+security-boundary and wire-contract code and its target line coverage, met by
+each side's (Rust, frontend) total; `pnpm coverage:critical` measures only that
+list and needs `cargo-llvm-cov`. Functions, or named branches of one, that need a
+live database, network, keychain, or child process sit in `integrationOnly` with
+a reason; the manifest does not claim integration coverage for them. Raise
 coverage only with tests that assert an invariant; the 208-test budget still
 applies.
 Contract harnesses matching `*.harness.*` run under their own vitest configs and

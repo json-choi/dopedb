@@ -203,9 +203,10 @@ control에는 실제 command와 state owner가 있어야 한다.
   실행할 수 없어 범위 밖이다.
 - `pnpm dev:app`: 데스크톱 앱 개발 실행.
 - `pnpm coverage:critical`: `tests/critical-coverage.json`이 나열한 보안 경계와
-  wire contract 코드의 단위 테스트 line coverage를 목표와 비교한다.
-  `cargo-llvm-cov`가 필요하고, 실제 DB·네트워크가 필요한 함수는 이유와 함께
-  `integrationOnly`로 제외한다. coverage는 불변식을 단언하는 테스트로만 올린다.
+  wire contract 코드의 단위 테스트 line coverage를 Rust·frontend 합계별로 목표와
+  비교한다. `cargo-llvm-cov`가 필요하고, 실제 DB·네트워크가 필요한 함수나 그
+  분기는 이유와 함께 `integrationOnly`로 제외하되 통합 검증을 받았다고 주장하지
+  않는다. coverage는 불변식을 단언하는 테스트로만 올린다.
 - `pnpm check:code-structure`: 검토된 혼합 책임 hotspot과 결합된 fragment
   cluster가 늘어나지 않는지 확인한다. 전체 순위는 `pnpm audit:code-structure`로
   보고 baseline 변경 전에 직접 검토한다. 300줄은 강제 분리 한도가 아니라

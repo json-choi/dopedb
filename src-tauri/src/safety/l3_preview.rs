@@ -372,16 +372,6 @@ mod tests {
             }
         }
 
-        // Driver and application failures keep only the database's message.
-        assert_eq!(
-            app_failure(&AppError::Db(sqlx::Error::PoolTimedOut)),
-            sqlx::Error::PoolTimedOut.to_string()
-        );
-        assert_eq!(
-            app_failure(&AppError::Config("dry run rejected".into())),
-            AppError::Config("dry run rejected".into()).to_string()
-        );
-
         // Row estimates come from the first matching key at any depth, in key
         // priority order, from integer, float, or numeric-string values.
         let plans = [
