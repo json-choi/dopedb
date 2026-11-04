@@ -75,11 +75,27 @@
     },
     "src-tauri/src/features/providers/adapters/authority_tests.rs": {
       "tests": 4,
-      "protects": "Provider inventory authority, duplicate-key-safe CLI JSON/exit status, literal fixed argv, Unicode/path/executable drift rejection, exact managed-target and connection-pinned receipts, cross-workspace/account scope CAS, restart-safe recovery, deterministic partial destroy repair, and Provider-audit hash-chain correlation"
+      "protects": "Provider inventory authority, duplicate-key-safe CLI JSON/exit status, literal fixed argv, Unicode/path/executable drift rejection, exact managed-target and connection-pinned receipts, cross-workspace/account scope CAS, closed stored provider names and workspace/account/generation-partitioned binding-scope fingerprints, restart-safe recovery, deterministic partial destroy repair, and Provider-audit hash-chain correlation"
     },
     "src-tauri/src/features/queries/domain_tests.rs": {
       "tests": 1,
-      "protects": "Production guidance, namespace safety, current Services result shape, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, the closed loopback engine/port allowlist and printable-version bound of local database discovery, official ACP model/permission-mode allowlists without default escalation, secret-free typed connection-test receipts, opt-in bounded local diagnostics with authentication-material filtering and clear-generation isolation, redacted non-retryable database timeout/cancellation classification across query, Article, and target operations, an authenticated catalog search reaching connection authority resolution within a 1 MiB async worker stack in unoptimized builds, and direct shared-database principal rules (SCRAM and caching_sha2 verifier vectors and exact-format validators, DopeDB-only principal naming, version/scope gates, fixed grant plans without default privileges, and marker/identity ownership proof before any destructive change)"
+      "protects": "Production, busy, unestimated, and over-threshold planning guidance, namespace safety, current Services result shape persisted only for terminal sessions with a consistent result kind, bounded labels, and a complete self-consistent 256-row disk-backed stream handle with a 64-hex capability, frozen Agent plan/run audit actions, desktop stream sink failures that never render as a user cancellation, Knowledge source bindings refused for a foreign, stale, or zero environment revision or an unsafe display name, Analysis Article local results refused without echoing stored bytes, Agent failure codes and closed response languages, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, the closed loopback engine/port allowlist and printable-version bound of local database discovery, official ACP model/permission-mode allowlists without default escalation, secret-free typed connection-test receipts, opt-in bounded local diagnostics with authentication-material filtering and clear-generation isolation, redacted non-retryable database timeout/cancellation classification across query, Article, and target operations, an authenticated catalog search reaching connection authority resolution within a 1 MiB async worker stack in unoptimized builds, and direct shared-database principal rules (SCRAM and caching_sha2 verifier vectors and exact-format validators, DopeDB-only principal naming, version/scope gates, fixed grant plans without default privileges, marker/identity ownership proof before any destructive change, validated marker decoding, and categorical failure codes identical to their stored wire spelling)"
+    },
+    "src-tauri/src/features/connections/domain.rs": {
+      "tests": 1,
+      "protects": "Schema groups never mix database engines or admit BigQuery, an exact CLI connection name resolves to one connection and never to a case variant or an ambiguous guess, and the Agent connection projection carries only its allowlisted fields with no host, user, or secret reference"
+    },
+    "src-tauri/src/features/terminals/domain.rs": {
+      "tests": 1,
+      "protects": "Advanced Shell create requests accept only the exact connection selector and Shell profile, terminal dimensions stay within their bounds, and only exited or failed sessions count as terminal"
+    },
+    "src-tauri/src/features/workspaces/domain.rs": {
+      "tests": 2,
+      "protects": "Hosted membership roles parse only from their exact spelling with editor-or-above team connection creation, the workspace feature flag disables only on explicit off values, member usernames are bounded and control-free, device-only SQLite files never publish, and member-local TLS settings accept only the engine's allowlisted bounded file paths or MongoDB enable flag without smuggling other driver options"
+    },
+    "src-tauri/src/kernel/mod.rs": {
+      "tests": 1,
+      "protects": "Hosted account ids stay bounded and whitespace/control-free when built or decoded, typed UUID identities keep the bare UUID wire shape, SQL namespaces are trimmed byte-bounded control-free data quoted as one identifier, and environment labels map onto the fixed list without a development binding lowering production"
     },
     "src-tauri/src/features/workspace_admin/domain/routes_tests.rs": {
       "tests": 4,
@@ -95,7 +111,7 @@
     },
     "src-tauri/src/safety/l1_parse.rs": {
       "tests": 14,
-      "protects": "Fail-safe SQL classification for high-risk statement shapes and connection startup script session allowlisting"
+      "protects": "Fail-safe SQL classification for high-risk statement shapes (DML or row locks hidden in CTEs and set-expression branches, EXPLAIN ANALYZE options that only an explicit false disables, Unicode-escaped set_config calls, empty or over-nested input, role drops, and unsupported PRAGMA forms), read-only dialect rewrites and Unicode identifiers, impact-preview target eligibility only for exact reads or direct DML, and connection startup script session allowlisting"
     },
     "src-tauri/src/safety/l2_enforce.rs": {
       "tests": 4,
@@ -107,7 +123,7 @@
     },
     "src-tauri/src/safety/l4_gate.rs": {
       "tests": 7,
-      "protects": "Write blocking, approval requirements, and privilege denial"
+      "protects": "Write blocking, approval requirements (including reads when auto-run is off), and privilege denial"
     },
     "src-tauri/src/store/tests/connections_scope.rs": {
       "tests": 5,

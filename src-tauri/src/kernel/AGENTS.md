@@ -37,7 +37,12 @@ without pulling in Tauri, SQLx, or any adapter.
 
 ### Testing Requirements
 
-- Covered indirectly by `pnpm test:rust` (`cargo test --package dopedb --lib`); no dedicated `#[cfg(test)]` block here today.
+- `pnpm test:rust` (`cargo test --package dopedb --lib`). `mod.rs` holds this
+  directory's only `#[cfg(test)]` block, **part of the 208-test critical
+  budget** (`tests/critical-test-budget.json`, 1 test): bounded account ids,
+  the bare-UUID identity wire shape, byte-bounded control-free SQL namespaces,
+  and environment labels that a development binding never lowers from
+  production. Extend that test instead of adding another.
 
 ## Dependencies
 

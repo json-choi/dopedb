@@ -498,6 +498,7 @@ mod tests {
                 21,
             ),
             (r#"SELECT U&"set\005fconfig"('role', 'admin', false)"#, 8),
+            (r#"SELECT U&"set\+00005Fconfig"('role', 'admin', false)"#, 8),
             (
                 "SELECT id FROM t WHERE x = (SELECT set_config('search_path', 'x', false))",
                 36,
@@ -517,6 +518,8 @@ mod tests {
             "SELECT 'set_config(' AS s",
             "SELECT 1 -- set_config(\n",
             "SELECT current_setting('default_transaction_read_only')",
+            // An escaped backslash decodes to a different name, not set_config.
+            r#"SELECT U&"set\\config"('role')"#,
         ] {
             let parsed = analysis(sql, Engine::Postgres);
             assert_eq!(
@@ -591,6 +594,26 @@ mod tests {
                 "SELECT * FROM users INDEXED BY users_name WHERE name IS NOT nickname",
                 Engine::Sqlite,
             ),
+            ("SELECT id FROM a UNION TABLE b", Engine::Postgres),
+            // `TABLE` after a set operator is rewritten alongside another
+            // unmodeled form and still stays a read.
+            (
+                "SELECT * FROM ROWS FROM (generate_series(1, 2)) AS x(a) UNION ALL TABLE b",
+                Engine::Postgres,
+            ),
+            (
+                "SELECT * FROM users NOT INDEXED WHERE id = 1",
+                Engine::Sqlite,
+            ),
+            (
+                "SELECT name FROM pragma_table_info('users')",
+                Engine::Sqlite,
+            ),
+            (
+                r#"SELECT "名前" FROM "ユーザー" WHERE "ä" = 'ü'"#,
+                Engine::Postgres,
+            ),
+            ("SELECT id FROM `project.dataset.events`", Engine::Bigquery),
         ] {
             let parsed = analysis(sql, engine);
             assert_eq!(parsed.classification.kind, QueryKind::Read, "{sql}");
@@ -599,7 +622,15 @@ mod tests {
                 ClassificationIntegrity::ExactSingle,
                 "{sql}"
             );
+            assert!(parsed.is_exact_single_read(), "{sql}");
+            assert!(parsed.may_touch_target_for_impact_preview(), "{sql}");
         }
+        // The approval card lists every joined, derived, and set-operation table once.
+        assert_eq!(
+            c("SELECT * FROM a JOIN b ON a.id = b.id UNION SELECT * FROM (SELECT * FROM c JOIN a ON true) AS s").tables,
+            ["a", "b", "c"]
+        );
+        assert_eq!(c(r#"SELECT * FROM "ユーザー""#).tables, [r#""ユーザー""#]);
     }
 
     #[test]
@@ -642,6 +673,27 @@ mod tests {
         ] {
             assert_eq!(analysis(sql, engine).classification.kind, QueryKind::Write, "{sql}");
         }
+        // DML hidden in a parenthesized branch of a set expression is a write
+        // that is never direct DML, so it cannot touch the target for an impact
+        // preview before approval.
+        for sql in [
+            "SELECT id FROM a UNION ALL (WITH d AS (DELETE FROM t RETURNING id) SELECT id FROM d)",
+            "(WITH d AS (UPDATE t SET a = 1 RETURNING id) SELECT id FROM d) EXCEPT SELECT id FROM a",
+            "WITH d AS (INSERT INTO log VALUES (1) RETURNING id) SELECT * FROM d",
+        ] {
+            let parsed = analysis(sql, Engine::Postgres);
+            assert_eq!(parsed.classification.kind, QueryKind::Write, "{sql}");
+            assert!(!parsed.classification.direct_dml, "{sql}");
+            assert!(!parsed.may_touch_target_for_impact_preview(), "{sql}");
+            assert!(!parsed.is_exact_single_read(), "{sql}");
+        }
+        // The approval card names the table a writable CTE changes.
+        let tables = c("WITH d AS (DELETE FROM orders RETURNING *) SELECT * FROM d").tables;
+        assert!(tables.contains(&"orders".to_string()), "{tables:?}");
+        let direct = analysis("UPDATE users SET name = 'x' WHERE id = 1", Engine::Postgres);
+        assert!(direct.classification.direct_dml);
+        assert!(direct.may_touch_target_for_impact_preview());
+        assert!(!direct.is_exact_single_read());
     }
 
     #[test]
@@ -671,11 +723,20 @@ mod tests {
         for sql in [
             "EXPLAIN (ANALYZE true, BUFFERS) DELETE FROM orders WHERE id = 1",
             "EXPLAIN (FORMAT JSON, ANALYZE on) UPDATE orders SET paid = true WHERE id = 1",
+            // Unknown or non-false spellings fail closed as executing.
+            "EXPLAIN (ANALYZE 1) DELETE FROM orders",
+            "EXPLAIN (ANALYZE 'yes') DELETE FROM orders",
+            "EXPLAIN (ANALYZE NULL) DELETE FROM orders",
+            "EXPLAIN (ANALYZE maybe) DELETE FROM orders",
         ] {
             assert_eq!(c(sql).kind, QueryKind::Write, "{sql}");
         }
         for sql in [
             "EXPLAIN (ANALYZE false) DELETE FROM orders",
+            "EXPLAIN (ANALYZE 0) DELETE FROM orders",
+            "EXPLAIN (ANALYZE 'off') DELETE FROM orders",
+            "EXPLAIN (ANALYZE 'No') DELETE FROM orders",
+            "EXPLAIN (ANALYZE off) DELETE FROM orders",
             "EXPLAIN (COSTS off) DELETE FROM orders",
             "EXPLAIN (ANALYZE) SELECT * FROM orders",
         ] {
@@ -695,6 +756,14 @@ mod tests {
         let r = c("SELECT id FROM users WHERE id = 1 FOR UPDATE");
         assert_eq!(r.kind, QueryKind::Write);
         assert_eq!(r.risk, RiskLevel::Medium);
+        // Row locks anywhere in the query tree make it a write.
+        for sql in [
+            "WITH l AS (SELECT id FROM t FOR UPDATE) SELECT * FROM l",
+            "SELECT 1 UNION (SELECT id FROM t FOR SHARE)",
+            "(SELECT id FROM t FOR UPDATE) UNION ALL SELECT 2",
+        ] {
+            assert_eq!(c(sql).kind, QueryKind::Write, "{sql}");
+        }
     }
 
     #[test]
@@ -709,13 +778,37 @@ mod tests {
             ("PRAGMA user_version(5)", Engine::Sqlite),
             ("PRAGMA wal_checkpoint", Engine::Sqlite),
             ("PRAGMA table_info(t); DELETE FROM t", Engine::Sqlite),
+            ("PRAGMA (1)", Engine::Sqlite),
+            ("PRAGMA table_info(*)", Engine::Sqlite),
+            ("PRAGMA table_info(t, u)", Engine::Sqlite),
             ("SHOW PROCESSLIST", Engine::Mysql),
+            ("DROP ROLE admin", Engine::Postgres),
+            ("DROP USER app", Engine::Mysql),
         ] {
             assert_eq!(
                 analysis(sql, engine).classification.kind,
                 QueryKind::Privilege,
                 "{sql}"
             );
+        }
+        let dropped =
+            serde_json::to_value(rejection_error("DROP ROLE admin", Engine::Postgres)).unwrap();
+        assert_eq!(dropped["kind"], "sqlPolicyBlocked");
+        assert_eq!(dropped["position"], 1);
+        // No statement, or one nested past the parser limit, is a parse failure
+        // that blocks before execution rather than an error or a read.
+        let nested = format!("SELECT {}1{}", "(".repeat(200), ")".repeat(200));
+        for sql in ["", ";", "-- only a comment", nested.as_str()] {
+            let parsed = analysis(sql, Engine::Postgres);
+            assert_eq!(parsed.classification.kind, QueryKind::Privilege, "{sql}");
+            assert_eq!(parsed.classification.risk, RiskLevel::High, "{sql}");
+            assert_eq!(
+                parsed.integrity,
+                ClassificationIntegrity::ParseFailed,
+                "{sql}"
+            );
+            let error = serde_json::to_value(rejection_error(sql, Engine::Postgres)).unwrap();
+            assert_eq!(error["kind"], "sqlParseFailed", "{sql}");
         }
     }
 

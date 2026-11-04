@@ -57,6 +57,9 @@ process handles, and broker capabilities all die with the desktop runtime.
 
 - `pnpm test:rust` (`cargo test --package dopedb --lib`);
   `adapters/windows_pty_test_support.rs` backs Windows-specific ConPTY tests.
+  `domain.rs` is part of the 208-test critical budget
+  (`tests/critical-test-budget.json`, 1 test): the exact create-request shape,
+  terminal dimension bounds, and which lifecycles are terminal.
 
 ## Dependencies
 

@@ -252,3 +252,193 @@ pub(crate) fn merge_member_tls_files(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::model::{ConnectionProfile, Engine, Provider};
+
+    fn profile(engine: Engine, provider: Provider) -> ConnectionProfile {
+        let mut profile: ConnectionProfile = serde_json::from_value(serde_json::json!({
+            "id": uuid::Uuid::new_v4(),
+            "name": "workspace-domain-fixture",
+            "engine": "postgres",
+            "host": "db.example.invalid",
+            "port": 5432,
+            "database": "app",
+            "username": "reader",
+            "sslmode": "require",
+            "readonlyDefault": true,
+            "allowWrites": false,
+            "secretRef": null
+        }))
+        .expect("fixture profile");
+        profile.engine = engine;
+        profile.provider = provider;
+        profile
+    }
+
+    fn params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+            .collect()
+    }
+
+    #[test]
+    fn membership_roles_feature_flags_and_usernames_fail_closed() {
+        // A hosted role string is accepted only in its exact lowercase spelling;
+        // anything else is a malformed authority response, never a guessed role.
+        for (raw, role) in [
+            (None, WorkspaceRole::Viewer),
+            (Some("viewer"), WorkspaceRole::Viewer),
+            (Some("analyst"), WorkspaceRole::Analyst),
+            (Some("editor"), WorkspaceRole::Editor),
+            (Some("admin"), WorkspaceRole::Admin),
+            (Some("owner"), WorkspaceRole::Owner),
+        ] {
+            assert_eq!(parse_workspace_role(raw).unwrap(), role, "{raw:?}");
+        }
+        for raw in ["", "Owner", " admin", "superuser", "editor\n"] {
+            assert!(
+                matches!(parse_workspace_role(Some(raw)), Err(AppError::Network(_))),
+                "role {raw:?} must be rejected"
+            );
+        }
+        // Only editors and above may create team connections.
+        for (role, allowed) in [
+            (WorkspaceRole::Viewer, false),
+            (WorkspaceRole::Analyst, false),
+            (WorkspaceRole::Editor, true),
+            (WorkspaceRole::Admin, true),
+            (WorkspaceRole::Owner, true),
+        ] {
+            assert_eq!(can_create_team_connection(role), allowed, "{role:?}");
+        }
+
+        // The workspace feature is on unless explicitly disabled.
+        for (raw, enabled) in [
+            (None, true),
+            (Some("1"), true),
+            (Some("true"), true),
+            (Some("unexpected"), true),
+            (Some("0"), false),
+            (Some("false"), false),
+            (Some(" OFF "), false),
+            (Some("False"), false),
+        ] {
+            assert_eq!(workspace_feature_enabled(raw), enabled, "{raw:?}");
+        }
+
+        assert_eq!(
+            validate_member_username("  reader@example.invalid ").unwrap(),
+            "reader@example.invalid"
+        );
+        let longest = "u".repeat(320);
+        assert_eq!(validate_member_username(&longest).unwrap(), longest);
+        for invalid in ["u".repeat(321), "read\u{0}er".into(), "reader\nrole".into()] {
+            assert!(
+                matches!(validate_member_username(&invalid), Err(AppError::Config(_))),
+                "username {invalid:?} must be rejected"
+            );
+        }
+
+        // A SQLite file path is device-only; Cloudflare D1 and network engines publish.
+        assert!(!is_publishable(&profile(Engine::Sqlite, Provider::Generic)));
+        assert!(!is_publishable(&profile(Engine::Sqlite, Provider::Auto)));
+        assert!(is_publishable(&profile(
+            Engine::Sqlite,
+            Provider::CloudflareD1
+        )));
+        assert!(is_publishable(&profile(Engine::Postgres, Provider::Neon)));
+        assert!(is_publishable(&profile(Engine::Mongodb, Provider::Generic)));
+    }
+
+    #[test]
+    fn member_tls_merge_accepts_only_engine_allowlisted_device_paths() {
+        // SQL engines keep certificate paths member-local; an empty value removes one.
+        for engine in [Engine::Postgres, Engine::Mysql] {
+            let mut current = params(&[("sslkey", "/old/key.pem"), ("connect_timeout", "5")]);
+            merge_member_tls_files(
+                engine,
+                &mut current,
+                &params(&[
+                    ("sslrootcert", "  /certs/root.pem "),
+                    ("sslcert", "/certs/client.pem"),
+                    ("sslkey", "  "),
+                ]),
+            )
+            .unwrap();
+            assert_eq!(
+                current,
+                params(&[
+                    ("sslrootcert", "/certs/root.pem"),
+                    ("sslcert", "/certs/client.pem"),
+                    ("connect_timeout", "5"),
+                ]),
+                "{engine:?}"
+            );
+        }
+
+        // MongoDB owns a member-local enable flag that accepts only `true` or removal.
+        let mut mongo = HashMap::new();
+        merge_member_tls_files(
+            Engine::Mongodb,
+            &mut mongo,
+            &params(&[("tls", " true "), ("tlsCAFile", "/certs/ca.pem")]),
+        )
+        .unwrap();
+        assert_eq!(
+            mongo,
+            params(&[("tls", "true"), ("tlsCAFile", "/certs/ca.pem")])
+        );
+        merge_member_tls_files(Engine::Mongodb, &mut mongo, &params(&[("tls", "")])).unwrap();
+        assert_eq!(mongo, params(&[("tlsCAFile", "/certs/ca.pem")]));
+
+        // Nothing outside the engine allowlist can be smuggled into the binding,
+        // and a rejected request leaves the existing parameters untouched.
+        let too_long = "p".repeat(MAX_MEMBER_TLS_PATH_CHARS + 1);
+        for (engine, key, value) in [
+            (Engine::Postgres, "sslmode", "disable"),
+            (Engine::Postgres, "host", "attacker.example.invalid"),
+            (Engine::Postgres, "tls", "true"),
+            (Engine::Mysql, "tlsCAFile", "/certs/ca.pem"),
+            (Engine::Mongodb, "sslrootcert", "/certs/root.pem"),
+            (Engine::Mongodb, "tls", "false"),
+            (Engine::Mongodb, "tlsInsecure", "true"),
+            (Engine::Sqlite, "sslrootcert", "/certs/root.pem"),
+            (Engine::Bigquery, "sslcert", "/certs/client.pem"),
+            (
+                Engine::Postgres,
+                "sslcert",
+                "/certs/client.pem\nsslmode=disable",
+            ),
+            (Engine::Mongodb, "tlsCertificateKeyFile", too_long.as_str()),
+        ] {
+            let mut current = params(&[("sslmode", "verify-full")]);
+            assert!(
+                matches!(
+                    merge_member_tls_files(engine, &mut current, &params(&[(key, value)])),
+                    Err(AppError::Config(_))
+                ),
+                "{engine:?} {key}={value:?} must be rejected"
+            );
+            assert_eq!(
+                current,
+                params(&[("sslmode", "verify-full")]),
+                "{engine:?} {key}"
+            );
+        }
+        let longest = "p".repeat(MAX_MEMBER_TLS_PATH_CHARS);
+        let mut current = HashMap::new();
+        merge_member_tls_files(
+            Engine::Postgres,
+            &mut current,
+            &params(&[("sslcert", longest.as_str())]),
+        )
+        .unwrap();
+        assert_eq!(current.get("sslcert"), Some(&longest));
+    }
+}

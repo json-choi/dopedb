@@ -81,6 +81,11 @@ webview, logs, local SQLite, or frontend query caches.
   `src/features/workspaces/authPolicy.test.ts` (3 tests) is part of the
   208-test critical budget and protects the corresponding client-side
   authentication/consent contracts this feature's transport backs.
+- `domain.rs` is part of the same budget (`tests/critical-test-budget.json`,
+  2 tests): exact hosted role parsing and the editor-or-above team-connection
+  gate, the feature flag, bounded member usernames, device-only SQLite
+  publication, and the engine allowlist for member-local TLS settings. Extend
+  those tests instead of adding another.
 
 ### Common Patterns
 

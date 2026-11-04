@@ -129,3 +129,73 @@ pub struct TerminalOutputChunk {
 pub struct TerminalStateEvent {
     pub session: TerminalSessionSummary,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_request_size_bounds_and_terminal_lifecycle_are_closed() {
+        // The renderer may omit the size, but it cannot add fields beside the
+        // exact connection selector and profile.
+        let connection_id = uuid::Uuid::new_v4();
+        let request: TerminalCreateRequest = serde_json::from_value(serde_json::json!({
+            "connectionId": connection_id,
+            "profile": "shell"
+        }))
+        .unwrap();
+        assert_eq!(uuid::Uuid::from(request.connection_id), connection_id);
+        assert_eq!(request.size, TerminalSize::default());
+        assert_eq!(
+            request.size.validate(),
+            Ok(TerminalSize {
+                cols: 100,
+                rows: 30,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+        );
+        for rejected in [
+            serde_json::json!({ "connectionId": connection_id, "profile": "shell", "command": "sh" }),
+            serde_json::json!({ "connectionId": connection_id, "profile": "agent" }),
+            serde_json::json!({ "profile": "shell" }),
+        ] {
+            assert!(
+                serde_json::from_value::<TerminalCreateRequest>(rejected.clone()).is_err(),
+                "{rejected}"
+            );
+        }
+
+        let size = |cols, rows, pixel_width, pixel_height| TerminalSize {
+            cols,
+            rows,
+            pixel_width,
+            pixel_height,
+        };
+        for accepted in [size(10, 2, 0, 0), size(1_000, 500, 32_000, 32_000)] {
+            assert_eq!(accepted.validate(), Ok(accepted));
+        }
+        for rejected in [
+            size(9, 30, 0, 0),
+            size(1_001, 30, 0, 0),
+            size(100, 1, 0, 0),
+            size(100, 501, 0, 0),
+            size(100, 30, 32_001, 0),
+            size(100, 30, 0, 32_001),
+        ] {
+            assert!(rejected.validate().is_err(), "{rejected:?}");
+        }
+
+        // Only exited and failed sessions are terminal; a stopping session still
+        // owns its process tree.
+        for (lifecycle, terminal) in [
+            (TerminalLifecycle::Starting, false),
+            (TerminalLifecycle::Running, false),
+            (TerminalLifecycle::Stopping, false),
+            (TerminalLifecycle::Exited, true),
+            (TerminalLifecycle::Failed, true),
+        ] {
+            assert_eq!(lifecycle.is_terminal(), terminal, "{lifecycle:?}");
+        }
+    }
+}

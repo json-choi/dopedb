@@ -295,4 +295,24 @@ pub(crate) fn assert_agent_event_wire_contract() {
     .expect("read the closed Agent response language");
     assert_eq!(korean_context.response_language, AgentResponseLanguage::Ko);
     assert!(serde_json::from_value::<AcpPromptContext>(serde_json::json!({})).is_err());
+    assert!(serde_json::from_value::<AgentResponseLanguage>(serde_json::json!("ja")).is_err());
+    assert_eq!(
+        AgentResponseLanguage::default().instruction_name(),
+        "English"
+    );
+    assert_eq!(AgentResponseLanguage::Ko.instruction_name(), "Korean");
+
+    // The Desktop maps `code[:provider]` on the first line and never parses the
+    // copyable diagnostic that follows it.
+    assert_eq!(
+        agent_error::for_provider(agent_error::CLI_MISSING, AgentProvider::Claude),
+        "agent_cli_missing:claude"
+    );
+    assert_eq!(
+        agent_error::for_provider(agent_error::CLI_NOT_AUTHENTICATED, AgentProvider::Codex),
+        "agent_cli_not_authenticated:codex"
+    );
+    let detailed = agent_error::with_detail(agent_error::START_TIMED_OUT, "exit status 1\nstderr");
+    assert_eq!(detailed.lines().next(), Some("agent_start_timed_out"));
+    assert_eq!(detailed, "agent_start_timed_out\nexit status 1\nstderr");
 }

@@ -282,3 +282,140 @@ pub(crate) fn assert_local_listener_discovery_contract() {
         None
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::kernel::environment::EnvironmentKind;
+
+    fn profile(name: &str, engine: Engine, schema_group: Option<&str>) -> ConnectionProfile {
+        let mut profile: ConnectionProfile = serde_json::from_value(serde_json::json!({
+            "id": uuid::Uuid::new_v4(),
+            "name": name,
+            "engine": "postgres",
+            "host": "db.example.invalid",
+            "port": 5432,
+            "database": "app",
+            "username": "reader",
+            "sslmode": "require",
+            "readonlyDefault": true,
+            "allowWrites": false,
+            "secretRef": "keychain-item-must-not-escape"
+        }))
+        .expect("fixture profile");
+        profile.engine = engine;
+        profile.schema_group = schema_group.map(str::to_owned);
+        profile
+    }
+
+    #[test]
+    fn schema_groups_and_cli_selectors_never_cross_engines_or_guess() {
+        assert_eq!(normalize_schema_group(None), None);
+        assert_eq!(normalize_schema_group(Some(" \t ".into())), None);
+        assert_eq!(
+            normalize_schema_group(Some("  Sales ".into())),
+            Some("Sales".into())
+        );
+
+        // A schema group compares one engine's schemas; a different engine in the
+        // same group (matched case-insensitively and trimmed) is refused.
+        let mysql_sales = profile("orders", Engine::Mysql, Some(" SALES "));
+        let postgres_sales = profile("ledger", Engine::Postgres, Some("sales"));
+        let existing = [mysql_sales.clone(), postgres_sales.clone()];
+        assert!(matches!(
+            validate_schema_group_engine(
+                &profile("new", Engine::Postgres, Some("sales")),
+                &existing
+            ),
+            Err(AppError::Config(_))
+        ));
+        assert!(validate_schema_group_engine(
+            &profile("new", Engine::Postgres, Some("finance")),
+            &existing
+        )
+        .is_ok());
+        assert!(
+            validate_schema_group_engine(&profile("new", Engine::Mysql, None), &existing).is_ok()
+        );
+        // Re-validating a saved profile ignores its own stored row.
+        let mut moved = mysql_sales.clone();
+        moved.engine = Engine::Postgres;
+        assert!(validate_schema_group_engine(&moved, &[mysql_sales]).is_ok());
+        assert!(matches!(
+            validate_schema_group_engine(
+                &profile("warehouse", Engine::Bigquery, Some("sales")),
+                &[]
+            ),
+            Err(AppError::Blocked { .. })
+        ));
+        assert!(
+            validate_schema_group_engine(&profile("warehouse", Engine::Bigquery, None), &[])
+                .is_ok()
+        );
+
+        // The Agent projection carries only the allowlisted fields.
+        let mut production = profile("prod", Engine::Postgres, None);
+        production.effective_env = Some(EnvironmentKind::Production);
+        production.allow_writes = true;
+        let summary = AgentConnectionSummary::from(&production);
+        assert_eq!(uuid::Uuid::from(summary.id), production.id);
+        assert_eq!(summary.environment.as_deref(), Some("production"));
+        assert!(summary.readonly && summary.allow_writes);
+        let wire = serde_json::to_value(&summary).unwrap();
+        let mut keys = wire
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        keys.sort();
+        assert_eq!(
+            keys,
+            [
+                "allowWrites",
+                "database",
+                "engine",
+                "environment",
+                "id",
+                "name",
+                "readonly"
+            ]
+        );
+        for secret in [
+            "db.example.invalid",
+            "reader",
+            "keychain-item-must-not-escape",
+        ] {
+            assert!(!wire.to_string().contains(secret), "{secret} leaked");
+        }
+
+        // A CLI name selects exactly one connection; case variants and duplicates
+        // never resolve to a guessed connection.
+        let staging = AgentConnectionSummary::from(&profile("staging", Engine::Mysql, None));
+        let first = AgentConnectionSummary::from(&profile("analytics", Engine::Postgres, None));
+        let second = AgentConnectionSummary::from(&profile("analytics", Engine::Mysql, None));
+        let summaries = [first.clone(), staging.clone(), second.clone()];
+        assert_eq!(resolve_cli_name(&summaries, "staging"), Ok(staging));
+        for missing in ["Staging", "staging ", "", "prod"] {
+            assert_eq!(
+                resolve_cli_name(&summaries, missing),
+                Err(CliConnectionResolutionError::NoMatch),
+                "{missing:?}"
+            );
+        }
+        let mut expected = vec![first, second];
+        expected.sort_by_key(|summary| summary.id);
+        let ambiguous = resolve_cli_name(&summaries, "analytics").unwrap_err();
+        assert_eq!(
+            ambiguous,
+            CliConnectionResolutionError::Ambiguous {
+                candidates: expected
+            }
+        );
+        assert_ne!(
+            ambiguous.to_string(),
+            CliConnectionResolutionError::NoMatch.to_string()
+        );
+        assert!(!ambiguous.to_string().contains("analytics"));
+    }
+}
