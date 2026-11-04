@@ -65,10 +65,14 @@ import {
   parseConnectionUrl,
 } from "../connections/connectionUrl";
 import {
+  canBindMemberCredentials,
   canRecoverBigQueryAuthentication,
+  connectionAccessIssue,
   CONNECTION_TEST_FAILURE_CODES,
   CONNECTION_TEST_FAILURE_FIELDS,
   databaseDisplayLabel,
+  databaseEngineLabel,
+  isDeviceOnlySqlite,
   connectionId as connectionProfileId,
   type ConnectionProfile,
   type DriverDescriptor,
@@ -594,6 +598,45 @@ describe("workbench state ownership", () => {
       "sql",
     ]);
     expect(restored.activeDocumentId).toContain(":sql:doc-1");
+  });
+
+  it("binds a manual credential only to a readable shared member-local database", () => {
+    type AccessFields = Parameters<typeof connectionAccessIssue>[0];
+    const shared: AccessFields = {
+      engine: "postgres",
+      provider: "generic",
+      credentialMode: "memberLocal",
+      secretRef: null,
+      username: "member",
+      workspaceAccess: "read",
+    };
+    const cases: [AccessFields, ReturnType<typeof connectionAccessIssue>, boolean][] = [
+      [shared, "credentials", true],
+      [{ ...shared, secretRef: "keychain:member" }, undefined, true],
+      [{ ...shared, workspaceAccess: "write" }, "credentials", true],
+      [{ ...shared, workspaceAccess: "view" }, "grant", false],
+      [{ ...shared, workspaceAccess: "local" }, undefined, false],
+      [{ ...shared, credentialMode: "managed" }, undefined, false],
+      // A generated account never offers a manual password path.
+      [{ ...shared, credentialMode: "provisioned", username: "" }, "provisioning", false],
+      [{ ...shared, credentialMode: "provisioned", username: "dopedb_member" }, undefined, false],
+      // CLI-authenticated engines never bind a username or password.
+      [{ ...shared, engine: "bigquery" }, undefined, false],
+      [{ ...shared, engine: "sqlite", provider: "cloudflareD1" }, undefined, false],
+    ];
+    for (const [connection, issue, canBind] of cases) {
+      expect(connectionAccessIssue(connection)).toBe(issue);
+      expect(canBindMemberCredentials(connection)).toBe(canBind);
+    }
+    expect(canRecoverBigQueryAuthentication(shared)).toBe(false);
+    expect(isDeviceOnlySqlite({ engine: "sqlite", provider: "generic", workspaceAccess: "local" })).toBe(true);
+    expect(isDeviceOnlySqlite({ engine: "sqlite", provider: "cloudflareD1", workspaceAccess: "local" })).toBe(false);
+    expect(isDeviceOnlySqlite({ engine: "sqlite", provider: "generic", workspaceAccess: "read" })).toBe(false);
+    expect(isDeviceOnlySqlite({ engine: "postgres", provider: "generic", workspaceAccess: "local" })).toBe(false);
+    expect(databaseDisplayLabel("postgres", " /srv/app ")).toBe("/srv/app");
+    expect(databaseDisplayLabel("sqlite", "C:\\Users\\person\\demo.db")).toBe("demo.db");
+    expect((["postgres", "mysql", "sqlite", "mongodb", "bigquery"] as const).map(databaseEngineLabel))
+      .toEqual(["PostgreSQL", "MySQL", "SQLite", "MongoDB", "BigQuery"]);
   });
 
   it("keeps one document instance and moves only the active pointer", async () => {

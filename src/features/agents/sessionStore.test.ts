@@ -1,3 +1,5 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { exerciseStartupOwnership } from "../../../tests/acpSessionStartupScenario";
 
@@ -8,6 +10,22 @@ vi.mock("./tauriAdapter", () => ({
   startAgentAcpSession: vi.fn(),
   closeAgentAcpSession: vi.fn(),
 }));
+vi.mock("../queries/tauriAdapter", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../queries/tauriAdapter")>(),
+  cancelQuery: vi.fn(),
+}));
+
+import { cancelQuery } from "../queries/tauriAdapter";
+import {
+  agentStartKey,
+  beginAgentApprovalRun,
+  beginForegroundAgentStart,
+  consumeAgentApprovalStop,
+  stopAgentApprovalRun,
+  useAgentApprovalRuns,
+  useForegroundAgentStarts,
+} from "./approvalActivity";
+import { findAgentSqlProposal, isFinalOperationState } from "./sqlProposal";
 
 import type {
   AcpSessionChanged,
@@ -26,7 +44,19 @@ import {
   isCurrentAcpFocusRequest,
   ownsStartedAcpSession,
   ownsAcpComposerRequest,
+  selectWorkspaceSessions,
 } from "./sessionFocus";
+
+/** Server-rendered snapshot of the process-local approval runs the status bar reads. */
+function approvalRuns() {
+  return renderToStaticMarkup(createElement(() =>
+    useAgentApprovalRuns().map((run) => `${run.operationId}:${run.stopping}`).join(","),
+  ));
+}
+
+function foregroundStarts() {
+  return renderToStaticMarkup(createElement(() => [...useForegroundAgentStarts()].join(",")));
+}
 
 function session(
   id: string,
@@ -475,5 +505,117 @@ describe("ACP session store", () => {
       error: null,
     });
     expect(listen).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports an approved run as stopped only once the executor accepts the stop", async () => {
+    const cancel = vi.mocked(cancelQuery);
+    cancel.mockReset();
+    const run = (operationId: string) => beginAgentApprovalRun({
+      operationId,
+      connectionId: "11111111-1111-4111-8111-111111111111",
+      connectionName: "app",
+      startedAt: 1,
+    });
+    run("op-a");
+    const endA = run("op-a");
+    const endB = run("op-b");
+    expect(approvalRuns()).toBe("op-a:false,op-b:false");
+
+    cancel.mockResolvedValueOnce(true);
+    await expect(stopAgentApprovalRun("op-a")).resolves.toBe(true);
+    expect(approvalRuns()).toBe("op-a:true,op-b:false");
+    expect(consumeAgentApprovalStop("op-a")).toBe(true);
+    expect(consumeAgentApprovalStop("op-a")).toBe(false);
+    endA();
+    // A run's end callback is single-use, so a stale one cannot end a newer run.
+    const endNext = run("op-a");
+    endA();
+    expect(approvalRuns()).toBe("op-b:false,op-a:false");
+    endNext();
+
+    // The run finished before the executor registered its cancel: nothing stopped.
+    cancel.mockImplementationOnce(async () => {
+      endB();
+      return false;
+    });
+    await expect(stopAgentApprovalRun("op-b")).resolves.toBe(false);
+    expect(consumeAgentApprovalStop("op-b")).toBe(false);
+    expect(approvalRuns()).toBe("");
+
+    // A stop pressed before the executor registers is retried until it lands.
+    vi.useFakeTimers();
+    try {
+      const endC = run("op-c");
+      cancel.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+      const stopping = stopAgentApprovalRun("op-c");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(approvalRuns()).toBe("op-c:true");
+      await vi.advanceTimersByTimeAsync(150);
+      await expect(stopping).resolves.toBe(true);
+      expect(cancel).toHaveBeenCalledTimes(4);
+      endC();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const endD = run("op-d");
+    cancel.mockRejectedValueOnce(new Error("executor unavailable"));
+    await expect(stopAgentApprovalRun("op-d")).rejects.toThrow("executor unavailable");
+    expect(approvalRuns()).toBe("op-d:false");
+    expect(consumeAgentApprovalStop("op-d")).toBe(false);
+    endD();
+
+    const key = agentStartKey("connection-1", "claude");
+    expect(key).toBe("connection-1:claude");
+    const endStart = beginForegroundAgentStart("connection-1", "claude");
+    const endSecondStart = beginForegroundAgentStart("connection-1", "claude");
+    const endCodex = beginForegroundAgentStart("connection-1", "codex");
+    expect(foregroundStarts()).toBe("connection-1:claude,connection-1:codex");
+    endStart();
+    endStart();
+    expect(foregroundStarts()).toBe("connection-1:claude,connection-1:codex");
+    endSecondStart();
+    endCodex();
+    expect(foregroundStarts()).toBe("");
+  });
+
+  it("finds only a well-formed proposal receipt and keeps enabled sessions newest first", () => {
+    const receipt = {
+      operationId: "e4ec6fa8-edf8-4c66-a8cc-da3bfbeb58a2",
+      connectionId: "eeeda2b1-47d9-404e-a143-3dd3b2f96d65",
+      payloadHash: "9a78926da9bc47dc62ba35d6fb0f375012e225c2e28b6a755f158e0765ad6c18",
+      state: "pending_approval",
+    };
+    expect(findAgentSqlProposal({ content: [{ type: "text", text: JSON.stringify(receipt) }] }))
+      .toEqual(receipt);
+    expect(findAgentSqlProposal([null, 4, { output: { data: receipt } }])).toEqual(receipt);
+    let nested: unknown = receipt;
+    for (let level = 0; level < 6; level += 1) nested = { result: nested };
+    expect(findAgentSqlProposal(nested)).toBeNull();
+    for (const forged of [
+      { ...receipt, operationId: "operation-1" },
+      { ...receipt, connectionId: "eeeda2b1-47d9-004e-a143-3dd3b2f96d65" },
+      { ...receipt, payloadHash: receipt.payloadHash.slice(1) },
+      { ...receipt, state: "committed" },
+      { ...receipt, state: 1 },
+    ]) {
+      expect(findAgentSqlProposal({ result: forged })).toBeNull();
+    }
+    expect(findAgentSqlProposal(42)).toBeNull();
+    expect(findAgentSqlProposal(undefined)).toBeNull();
+    for (const state of ["rejected", "expired", "cancelled", "succeeded", "failed", "outcome_unknown"] as const) {
+      expect(isFinalOperationState(state)).toBe(true);
+    }
+    for (const state of ["planned", "pending_approval", "ready", "approved", "executing"] as const) {
+      expect(isFinalOperationState(state)).toBe(false);
+    }
+
+    const older = { ...session("older", "2026-08-13T00:00:01.000Z"), provider: "claude" as const };
+    const newer = session("newer", "2026-08-13T00:00:03.000Z");
+    const disabled = { ...session("disabled", "2026-08-13T00:00:09.000Z"), provider: "claude" as const };
+    expect(selectWorkspaceSessions([older, newer], ["claude", "codex"]).map((item) => item.id))
+      .toEqual(["newer", "older"]);
+    expect(selectWorkspaceSessions([disabled, newer], ["codex"]).map((item) => item.id))
+      .toEqual(["newer"]);
   });
 });

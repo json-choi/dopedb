@@ -27,7 +27,14 @@ import {
   listQueryServiceSessions,
   saveQueryServiceSession,
 } from "../queryServices/tauriAdapter";
-import type { SqlOperationProposal } from "./domain";
+import {
+  acceptSqlStreamBatch,
+  emptySqlStreamView,
+  finishSqlStream,
+  type SqlOperationProposal,
+  type SqlStreamBatch,
+  type SqlStreamViewState,
+} from "./domain";
 import {
   exportSqlResult,
   inspectSql,
@@ -921,5 +928,93 @@ describe("query Tauri adapter", () => {
       operationId: null,
       capability: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
+  });
+
+  it("accepts only the next exact stream batch and completes only on a matching receipt", () => {
+    const capability = "ab".repeat(32);
+    const connecting: SqlStreamViewState = { ...emptySqlStreamView(7), phase: "connecting" };
+    const batch = (overrides: Partial<SqlStreamBatch> = {}): SqlStreamBatch => ({
+      operationId: "operation-1",
+      sequence: 0,
+      rowStart: 0,
+      columns: ["id", "payload"],
+      rows: [[1, "a"], [2, null]],
+      decodeFailures: [{ rowIndex: 1, columnIndex: 1, databaseType: "bytea" }],
+      resultCapability: capability,
+      ...overrides,
+    });
+    const first = acceptSqlStreamBatch(connecting, 7, batch());
+    expect(first).toMatchObject({
+      phase: "streaming",
+      operationId: "operation-1",
+      nextSequence: 1,
+      rowCount: 2,
+      columns: ["id", "payload"],
+      rowSource: {
+        operationId: "operation-1",
+        capability,
+        pageRanges: [{ sequence: 0, rowStart: 0, rowCount: 2 }],
+        complete: false,
+      },
+    });
+    const streaming = first as SqlStreamViewState;
+    // Each refusal keeps the caller from ACKing a batch it must not render.
+    const refused: [SqlStreamViewState, number, SqlStreamBatch][] = [
+      [connecting, 8, batch()],
+      [emptySqlStreamView(7), 7, batch()],
+      [{ ...connecting, phase: "complete" }, 7, batch()],
+      [connecting, 7, batch({ sequence: 1 })],
+      [connecting, 7, batch({ rowStart: 5 })],
+      [connecting, 7, batch({ rows: Array.from({ length: 257 }, () => [1, "x"]), decodeFailures: [] })],
+      [connecting, 7, batch({ rows: [[1]], decodeFailures: [] })],
+      [connecting, 7, batch({ decodeFailures: [{ rowIndex: 2, columnIndex: 0, databaseType: "bytea" }] })],
+      [connecting, 7, batch({ decodeFailures: [{ rowIndex: 0, columnIndex: 2, databaseType: "bytea" }] })],
+      [connecting, 7, batch({ decodeFailures: [{ rowIndex: 0, columnIndex: 1, databaseType: "" }] })],
+      // A failed cell must arrive as null, not as a value the grid would show.
+      [connecting, 7, batch({ decodeFailures: [{ rowIndex: 0, columnIndex: 1, databaseType: "bytea" }] })],
+      [connecting, 7, batch({ resultCapability: "zz".repeat(32) })],
+      [connecting, 7, batch({ resultCapability: "ab" })],
+      [streaming, 7, batch({ sequence: 1, rowStart: 2, operationId: "operation-2", decodeFailures: [] })],
+      [streaming, 7, batch({ sequence: 1, rowStart: 2, columns: ["id", "other"], decodeFailures: [] })],
+      [streaming, 7, batch({ sequence: 1, rowStart: 2, resultCapability: "cd".repeat(32), decodeFailures: [] })],
+      [streaming, 7, batch({ sequence: 1, rowStart: 2, rows: [], decodeFailures: [] })],
+    ];
+    for (const [state, runId, candidate] of refused) {
+      expect(acceptSqlStreamBatch(state, runId, candidate)).toBeNull();
+    }
+    expect(acceptSqlStreamBatch(connecting, 7, batch({ rows: [], decodeFailures: [] })))
+      .toMatchObject({ phase: "streaming", rowCount: 0, nextSequence: 1 });
+    const second = acceptSqlStreamBatch(
+      streaming,
+      7,
+      batch({ sequence: 1, rowStart: 2, rows: [[3, "c"]], decodeFailures: [] }),
+    ) as SqlStreamViewState;
+    expect(second.rowSource.pageRanges).toEqual([
+      { sequence: 0, rowStart: 0, rowCount: 2 },
+      { sequence: 1, rowStart: 2, rowCount: 1 },
+    ]);
+
+    const receipt = { operationId: "operation-1", rowCount: 3, truncated: true, durationMs: 12 };
+    expect(finishSqlStream(second, 6, receipt)).toBe(second);
+    expect(finishSqlStream({ ...second, phase: "cancelled" }, 7, receipt).phase).toBe("cancelled");
+    for (const forged of [
+      { ...receipt, operationId: "operation-2" },
+      { ...receipt, rowCount: 4 },
+    ]) {
+      expect(finishSqlStream(second, 7, forged)).toMatchObject({
+        phase: "outcome_unknown",
+        rowSource: { complete: false },
+        error: "stream completion receipt did not match accepted batches",
+      });
+    }
+    expect(finishSqlStream(second, 7, receipt, { clientTotalMs: 20 })).toMatchObject({
+      phase: "complete",
+      rowCount: 3,
+      truncated: true,
+      durationMs: 12,
+      rowSource: { rowCount: 3, complete: true },
+      timings: { clientTotalMs: 20 },
+    });
+    expect(finishSqlStream(second, 7, receipt)).not.toHaveProperty("timings");
   });
 });
