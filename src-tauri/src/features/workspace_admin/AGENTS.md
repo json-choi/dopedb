@@ -21,6 +21,7 @@ secrets it forwards.
 | `domain.rs` | Request/response types, `AdminRoute` (method, literal/UUID path segments, query, zeroizing body, expected revision, timeout, response cap), size/time limits, the provider start-URL validator, and the signed-in-account check. |
 | `domain/operation.rs` | The closed `WorkspaceAdminOperation` catalog: an internally tagged enum (`kind`) with camelCase fields and `deny_unknown_fields`. |
 | `domain/routes.rs` | Maps every operation to its exact control-plane method, path, query and JSON body; validates names, confirmations, opaque tokens, plan hashes and bounded provider payloads. |
+| `domain/routes_tests.rs` | Table-driven route catalog, closed-value, fail-closed bound and Debug redaction tests. |
 | `domain/values.rs` | Closed value enums (roles, capabilities, provider kinds, Neon actions, GCP inventory) and `SecretText`, a zeroizing secret with redacted `Debug`. |
 | `ports.rs` | `WorkspaceAdminControlPlanePort` (`execute`, `origin`). |
 | `application.rs` | `execute` and `start_provider_authorization`; both refuse an account that is not signed in on this device. |
@@ -43,15 +44,18 @@ secrets it forwards.
   bind the browser session's user to the state's user on the server.
 - Adding an operation means adding the variant in `operation.rs`, its route in
   `routes.rs`, the TypeScript union member in `src/features/workspaceAdmin/domain.ts`
-  with the same field names, and a contract assertion in `domain.rs`.
+  with the same field names, and its route case in `domain/routes_tests.rs`.
 - Keep `domain.rs` and its submodules free of Tauri, keychain and HTTP client types;
   only `adapters.rs` and `transport.rs` touch them.
 
 ### Testing Requirements
 
 - `pnpm test:rust` runs `assert_workspace_admin_contract()` inside the existing
-  `query_and_skill_security_contracts_stay_fail_closed` test. Extend those
-  assertions instead of adding a new test (208-test budget).
+  `query_and_skill_security_contracts_stay_fail_closed` test.
+- `domain/routes_tests.rs` holds the budget-tracked route catalog contract
+  (4 tests in `tests/critical-test-budget.json`): exact route per operation,
+  closed value spellings, fail-closed bounds and Debug redaction. Adding an
+  operation adds its case to those tables instead of a new test (208-test budget).
 
 ## Dependencies
 

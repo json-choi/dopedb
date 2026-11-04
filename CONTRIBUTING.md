@@ -108,6 +108,13 @@ harness는 전용 vitest 설정으로 실행되어 208개 예산에 포함되지
 `harness` 섹션이 파일 목록과 정확한 case 수를 강제하므로, harness 진입점을
 추가·삭제·이름 변경할 때는 같은 변경에서 그 섹션을 갱신한다.
 
+`tests/critical-coverage.json`은 보안 경계와 wire contract 코드 목록과 목표
+line coverage를 소유하며 목표는 Rust·frontend 각 합계에 적용된다.
+`pnpm coverage:critical`이 그 목록만 측정하며 `cargo-llvm-cov`가 필요하다. 실제
+DB, 네트워크, keychain, 자식 프로세스가 필요한 함수나 그 분기는 이유와 함께
+`integrationOnly`에 두며, 이 목록은 그것들이 통합 검증됐다고 주장하지 않는다. coverage는
+불변식을 단언하는 테스트로만 올리며 208개 예산 규칙은 그대로 적용된다.
+
 `pnpm check:code-structure`는 검토된 대형 혼합 책임 module과 결합된 작은 module
 cluster가 더 악화되는 것을 막는다. `pnpm audit:code-structure`의 전체 순위를 사람
 이 검토하지 않고 baseline을 재생성해서는 안 된다. 300줄은 강제 분리 한도가

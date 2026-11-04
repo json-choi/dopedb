@@ -263,3 +263,132 @@ fn as_i64(v: &serde_json::Value) -> Option<i64> {
         .or_else(|| v.as_f64().map(|f| f as i64))
         .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::RiskLevel;
+    use serde_json::json;
+
+    fn classification(kind: QueryKind) -> Classification {
+        Classification {
+            kind,
+            risk: RiskLevel::Low,
+            statement_count: 1,
+            no_where: false,
+            tables: vec!["t".into()],
+            notes: vec![],
+            direct_dml: matches!(kind, QueryKind::Write),
+        }
+    }
+
+    #[tokio::test]
+    async fn previews_never_execute_and_report_plan_failures() {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::raw_sql("CREATE TABLE t (id INTEGER PRIMARY KEY); INSERT INTO t VALUES (1), (2);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let settings = SafetySettings::default();
+        let rows = || async {
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM t")
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+        };
+
+        // A write is planned, never executed, and labelled as plan-only.
+        for sql in ["DELETE FROM t", "UPDATE t SET id = id + 10"] {
+            let report = preview(
+                PoolRef::Sqlite(&pool),
+                sql,
+                None,
+                &classification(QueryKind::Write),
+                &settings,
+            )
+            .await
+            .unwrap();
+            assert_eq!(report.mode, PreviewMode::Explain, "{sql}");
+            assert!(report.plan.is_some(), "{sql}");
+            assert_eq!(
+                report.note.as_deref(),
+                Some("EXPLAIN-only preview; no target-mutating statement was executed before approval"),
+                "{sql}"
+            );
+        }
+        assert_eq!(rows().await, 2, "previewed writes must not change data");
+        let ids: Vec<i64> = sqlx::query_scalar("SELECT id FROM t ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        assert_eq!(ids, vec![1, 2]);
+
+        // A failed plan carries the database's own diagnostic, not an empty plan.
+        for kind in [QueryKind::Read, QueryKind::Write] {
+            let report = preview(
+                PoolRef::Sqlite(&pool),
+                "DELETE FROM missing_table",
+                None,
+                &classification(kind),
+                &settings,
+            )
+            .await
+            .unwrap();
+            assert_eq!(report.mode, PreviewMode::Explain);
+            assert_eq!(report.plan, None);
+            assert_eq!(
+                report.note.as_deref(),
+                Some("EXPLAIN failed: no such table: missing_table"),
+                "{kind:?}"
+            );
+        }
+
+        // DDL and privilege statements are never planned, even with EXPLAIN off.
+        pool.close().await;
+        for explain_preview in [true, false] {
+            for kind in [QueryKind::Ddl, QueryKind::Privilege] {
+                let report = preview(
+                    PoolRef::Sqlite(&pool),
+                    "DROP TABLE t",
+                    None,
+                    &classification(kind),
+                    &SafetySettings {
+                        explain_preview,
+                        ..SafetySettings::default()
+                    },
+                )
+                .await
+                .unwrap();
+                assert_eq!(report.mode, PreviewMode::Skipped, "{kind:?}");
+                assert_eq!((report.estimated_rows, report.plan), (None, None));
+                assert!(report
+                    .note
+                    .as_deref()
+                    .is_some_and(|note| note.starts_with("DDL / privilege change")));
+            }
+        }
+
+        // Row estimates come from the first matching key at any depth, in key
+        // priority order, from integer, float, or numeric-string values.
+        let plans = [
+            (json!([{"Plan": {"Plan Rows": 42}}]), Some(42)),
+            (json!({"query_block": {"table": {"rows": "17"}}}), Some(17)),
+            (json!({"rows_produced_per_join": 3.9, "rows": 100}), Some(3)),
+            (json!({"rows": "many", "nested": {"rows": 8}}), Some(8)),
+            (json!({"other": [1, 2, 3]}), None),
+            (json!("Plan Rows"), None),
+            (serde_json::Value::Null, None),
+        ];
+        for (plan, expected) in plans {
+            assert_eq!(
+                find_number(&plan, &["Plan Rows", "rows_produced_per_join", "rows"]),
+                expected,
+                "{plan}"
+            );
+        }
+    }
+}

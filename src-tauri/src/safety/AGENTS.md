@@ -45,10 +45,12 @@ even when L1 misclassified it.
 ### Testing Requirements
 
 - `pnpm test:rust` (`cargo test --package dopedb --lib`) runs this module's
-  tests. Three files here are budget-protected under the repository's
+  tests. Four files here are budget-protected under the repository's
   208-test cap (`tests/critical-test-budget.json`): `l1_parse.rs` (14 tests —
   classification/fail-safe invariants), `l2_enforce.rs` (4 tests — DB-level
-  read-only rejection), and `l4_gate.rs` (7 tests — gate-decision matrix). A
+  read-only rejection), `l3_preview.rs` (1 test — plan-only write previews
+  and reported EXPLAIN failures), and `l4_gate.rs` (7 tests — gate-decision
+  matrix). A
   new test here must replace a lower-value existing test rather than raise the
   cap; run `pnpm check:test-budget` after a test change.
 

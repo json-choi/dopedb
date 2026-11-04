@@ -3033,3 +3033,220 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
         CacheWriteOutcome::Stored
     );
 }
+
+#[tokio::test]
+async fn provisioned_principal_bindings_stay_per_account_and_secret_free() {
+    let pool = memory_pool().await;
+    sqlx::raw_sql(schema::SCHEMA).execute(&pool).await.unwrap();
+    sqlx::raw_sql(schema::KNOWLEDGE_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let store = Store::from_pool_for_test(pool);
+    let workspace_id = Uuid::new_v4();
+    let user_a = workspace_user("10000000-0000-0000-0000-000000000001", "Alpha");
+    let user_b = workspace_user("20000000-0000-0000-0000-000000000002", "Beta");
+    for user in [&user_a, &user_b] {
+        store
+            .sync_account_workspaces(
+                user,
+                &[(workspace_id, "Shared".into(), WorkspaceRole::Analyst)],
+            )
+            .await
+            .unwrap();
+    }
+    let provisioned_id = Uuid::from_u128(0x1);
+    let member_local_id = Uuid::from_u128(0x2);
+    let mut provisioned = sqlite_profile(provisioned_id, "provisioned");
+    provisioned.workspace_access = crate::model::WorkspaceConnectionAccess::Read;
+    provisioned.credential_mode = crate::model::WorkspaceCredentialMode::Provisioned;
+    let mut member_local = sqlite_profile(member_local_id, "member-local");
+    member_local.workspace_access = crate::model::WorkspaceConnectionAccess::Read;
+    member_local.credential_mode = crate::model::WorkspaceCredentialMode::MemberLocal;
+    for user in [&user_a, &user_b] {
+        store
+            .sync_remote_connections(
+                workspace_id,
+                &user.id,
+                &[(provisioned.clone(), 1), (member_local.clone(), 1)],
+            )
+            .await
+            .unwrap();
+    }
+    let binding = |connection_id: Uuid, account: &AccountId| {
+        let store = store.clone();
+        let account = account.as_str().to_owned();
+        async move {
+            sqlx::query_as::<_, (String, Option<String>, i64, String, Option<String>)>(
+                "SELECT username, secret_ref, revision, extra_params, bound_endpoint
+                 FROM workspace_connection_bindings
+                 WHERE connection_id = ?1 AND account_user_id = ?2",
+            )
+            .bind(connection_id.to_string())
+            .bind(account)
+            .fetch_one(store.pool())
+            .await
+            .unwrap()
+        }
+    };
+
+    // The worker's candidate list names only provisioned templates per active
+    // member, and a template carries no username or secret reference.
+    let templates = store.provisioned_templates().await.unwrap();
+    let candidates = templates
+        .iter()
+        .map(|(workspace, account, template)| (*workspace, account.clone(), template.id))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        candidates,
+        vec![
+            (workspace_id, user_a.id.as_str().to_owned(), provisioned_id),
+            (workspace_id, user_b.id.as_str().to_owned(), provisioned_id),
+        ]
+    );
+    assert!(templates
+        .iter()
+        .all(|(_, _, template)| template.username.is_empty() && template.secret_ref.is_none()));
+    assert_eq!(
+        store
+            .provisioned_template(workspace_id, user_a.id.as_str(), provisioned_id)
+            .await
+            .unwrap()
+            .id,
+        provisioned_id
+    );
+    for (label, workspace, account, connection) in [
+        (
+            "another workspace",
+            Uuid::new_v4(),
+            user_a.id.as_str(),
+            provisioned_id,
+        ),
+        (
+            "an unbound account",
+            workspace_id,
+            "30000000-0000-0000-0000-000000000003",
+            provisioned_id,
+        ),
+        (
+            "a member-local template",
+            workspace_id,
+            user_a.id.as_str(),
+            member_local_id,
+        ),
+    ] {
+        assert!(
+            matches!(
+                store
+                    .provisioned_template(workspace, account, connection)
+                    .await,
+                Err(AppError::NotFound(_))
+            ),
+            "{label} must not resolve a provisioned template"
+        );
+    }
+
+    // A ready principal name lands only on that member's binding, bumps the
+    // revision once, and a repeat or a non-provisioned target changes nothing.
+    let (_, _, revision_a, _, _) = binding(provisioned_id, &user_a.id).await;
+    let before_b = binding(provisioned_id, &user_b.id).await;
+    let before_member_local = binding(member_local_id, &user_a.id).await;
+    for _ in 0..2 {
+        store
+            .apply_provisioned_principal(provisioned_id, user_a.id.as_str(), Some("dopedb_m_alpha"))
+            .await
+            .unwrap();
+    }
+    store
+        .apply_provisioned_principal(member_local_id, user_a.id.as_str(), Some("dopedb_m_alpha"))
+        .await
+        .unwrap();
+    let ready = binding(provisioned_id, &user_a.id).await;
+    assert_eq!(
+        (ready.0.as_str(), ready.2),
+        ("dopedb_m_alpha", revision_a + 1)
+    );
+    assert_eq!(binding(provisioned_id, &user_b.id).await, before_b);
+    assert_eq!(
+        binding(member_local_id, &user_a.id).await,
+        before_member_local
+    );
+
+    // A secret binding keeps the principal name, records the template endpoint,
+    // and returns the replaced item so the caller can delete it.
+    let options = HashMap::from([("ssh_alias".to_owned(), "bastion".to_owned())]);
+    assert_eq!(
+        store
+            .bind_provisioned_secret(provisioned_id, user_a.id.as_str(), &options, "item-1")
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        store
+            .bind_provisioned_secret(provisioned_id, user_a.id.as_str(), &options, "item-2")
+            .await
+            .unwrap(),
+        Some("item-1".to_owned())
+    );
+    let bound = binding(provisioned_id, &user_a.id).await;
+    assert_eq!(bound.0, "dopedb_m_alpha");
+    assert_eq!(bound.1.as_deref(), Some("item-2"));
+    assert_eq!(bound.2, revision_a + 3);
+    assert_eq!(
+        serde_json::from_str::<HashMap<String, String>>(&bound.3).unwrap(),
+        options
+    );
+    let endpoint: serde_json::Value = serde_json::from_str(bound.4.as_deref().unwrap()).unwrap();
+    assert_eq!(endpoint["engine"], "sqlite");
+    assert_eq!(binding(provisioned_id, &user_b.id).await, before_b);
+    for (label, connection, account) in [
+        (
+            "a member-local template",
+            member_local_id,
+            user_a.id.as_str(),
+        ),
+        (
+            "an unbound account",
+            provisioned_id,
+            "30000000-0000-0000-0000-000000000003",
+        ),
+    ] {
+        assert!(
+            matches!(
+                store
+                    .bind_provisioned_secret(connection, account, &options, "item-3")
+                    .await,
+                Err(AppError::NotFound(_))
+            ),
+            "{label} must not accept a provisioned secret"
+        );
+    }
+    assert_eq!(
+        binding(member_local_id, &user_a.id).await,
+        before_member_local
+    );
+
+    // A cleared principal closes the connection again; an inactive member is
+    // neither a candidate nor able to bind a secret.
+    store
+        .apply_provisioned_principal(provisioned_id, user_a.id.as_str(), None)
+        .await
+        .unwrap();
+    assert!(binding(provisioned_id, &user_a.id).await.0.is_empty());
+    sqlx::query("UPDATE workspace_members SET status = 'removed' WHERE user_id = ?1")
+        .bind(user_b.id.as_str())
+        .execute(store.pool())
+        .await
+        .unwrap();
+    let remaining = store.provisioned_templates().await.unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].1, user_a.id.as_str());
+    assert!(matches!(
+        store
+            .bind_provisioned_secret(provisioned_id, user_b.id.as_str(), &options, "item-4")
+            .await,
+        Err(AppError::NotFound(_))
+    ));
+    assert_eq!(binding(provisioned_id, &user_b.id).await, before_b);
+}

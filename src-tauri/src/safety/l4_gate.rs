@@ -109,6 +109,17 @@ mod tests {
             decide(&s, &cls(QueryKind::Read, 1)),
             GateDecision::AutoRun
         ));
+        // With auto-run off, even a read waits for an explicit confirm.
+        let manual = SafetySettings {
+            auto_run_reads: false,
+            ..SafetySettings::default()
+        };
+        assert!(matches!(
+            decide(&manual, &cls(QueryKind::Read, 1)),
+            GateDecision::RequireApproval
+        ));
+        let wire = serde_json::to_value(decide(&manual, &cls(QueryKind::Read, 1))).unwrap();
+        assert_eq!(wire, serde_json::json!({ "decision": "requireApproval" }));
     }
 
     #[test]

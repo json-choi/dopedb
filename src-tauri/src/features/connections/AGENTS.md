@@ -43,7 +43,12 @@ validates DopeDB-owned principals without rewriting pre-existing ones.
 
 ### Testing Requirements
 
-- `pnpm test:rust` (`cargo test --package dopedb --lib`).
+- `pnpm test:rust` (`cargo test --package dopedb --lib`). `domain.rs` is part
+  of the 208-test critical budget (`tests/critical-test-budget.json`, 1 test):
+  schema groups never mix engines or admit BigQuery, an exact CLI name never
+  resolves to a guess, and the Agent projection stays on its field allowlist.
+  Its `assert_local_listener_discovery_contract()` helper runs from
+  `../queries/domain_tests.rs`.
 
 ### Common Patterns
 

@@ -119,10 +119,36 @@ pub(crate) async fn assert_direct_access_contract() {
         Marker::from_mysql_attribute("{\"dopedb\":{\"v\":2,\"m\":\"Zm9vYmFyYmF6cXV4MTIz\"}}")
             .is_none()
     );
+    // A stored receipt marker decodes only through the same validation.
     assert_eq!(
-        serde_json::to_string(&FailureCode::NameConflict).unwrap(),
-        "\"name_conflict\""
+        serde_json::from_value::<Marker>(serde_json::json!("Zm9vYmFyYmF6cXV4MTIz")).unwrap(),
+        marker
     );
+    assert!(serde_json::from_value::<Marker>(serde_json::json!("short")).is_err());
+    // The categorical code that is logged and reported is exactly the stored wire
+    // spelling, so no raw driver text can stand in for one.
+    let codes = [
+        (FailureCode::MarkerMismatch, "marker_mismatch"),
+        (FailureCode::OidMismatch, "oid_mismatch"),
+        (FailureCode::OwnsObjects, "owns_objects"),
+        (FailureCode::UnexpectedMembership, "unexpected_membership"),
+        (FailureCode::GrantorInsufficient, "grantor_insufficient"),
+        (FailureCode::VersionUnsupported, "version_unsupported"),
+        (FailureCode::EndpointChanged, "endpoint_changed"),
+        (FailureCode::PermissionDenied, "permission_denied"),
+        (FailureCode::Network, "network"),
+        (FailureCode::NameConflict, "name_conflict"),
+        (FailureCode::CredentialMissing, "credential_missing"),
+    ];
+    for (code, text) in codes {
+        assert_eq!(code.as_str(), text);
+        assert_eq!(code.to_string(), text);
+        assert_eq!(serde_json::to_value(code).unwrap(), serde_json::json!(text));
+        assert_eq!(
+            serde_json::from_value::<FailureCode>(serde_json::json!(text)).unwrap(),
+            code
+        );
+    }
     assert_eq!(
         serde_json::to_string(&VerifierKind::ScramSha256).unwrap(),
         "\"scram-sha-256\""

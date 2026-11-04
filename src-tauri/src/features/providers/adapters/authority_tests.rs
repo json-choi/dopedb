@@ -143,6 +143,41 @@ fn inventory_parser_accepts_exact_boundary_and_rejects_truncated_unknown_or_fore
         };
         assert!(!error.to_string().contains(secret));
     }
+
+    // Stored provider names decode only from the closed spellings, and each local
+    // binding scope partitions keyring items by workspace, account, and generation.
+    use crate::features::providers::domain::{LocalProvider, ProviderScope};
+    for provider in [
+        LocalProvider::Neon,
+        LocalProvider::GcpCloudSql,
+        LocalProvider::PlanetScale,
+    ] {
+        assert_eq!(LocalProvider::parse(provider.storage_key()), Some(provider));
+        let wire = serde_json::to_value(provider).unwrap();
+        assert_eq!(LocalProvider::parse(wire.as_str().unwrap()), Some(provider));
+    }
+    for unknown in ["", "Neon", "planet_scale", "gcp", "cloudflareD1"] {
+        assert_eq!(LocalProvider::parse(unknown), None, "{unknown:?}");
+    }
+    let workspace = uuid::Uuid::new_v4();
+    let scope = |workspace: uuid::Uuid, account: &str, generation| ProviderScope {
+        workspace_id: workspace.into(),
+        account_id: crate::kernel::identity::AccountId::new(account).unwrap(),
+        scope_generation: generation,
+    };
+    let current = scope(workspace, "acct_a", 7).fingerprint();
+    assert_eq!(
+        current,
+        format!("provider-scope:v1:{workspace}:acct_a:7"),
+        "the fingerprint is the persisted binding key"
+    );
+    for other in [
+        scope(uuid::Uuid::new_v4(), "acct_a", 7),
+        scope(workspace, "acct_b", 7),
+        scope(workspace, "acct_a", 8),
+    ] {
+        assert_ne!(other.fingerprint(), current, "{other:?}");
+    }
 }
 
 #[test]

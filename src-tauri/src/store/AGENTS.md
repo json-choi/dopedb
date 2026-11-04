@@ -85,7 +85,7 @@ runtime-arbitrary-SQL client, not a fixed-schema application. Covers
 
 - `pnpm test:rust` (`cargo test --package dopedb --lib`) runs `tests/`.
   `repositories/analysis_articles.rs` (3 tests) and
-  `tests/connections_scope.rs` (4 tests) are budget-protected under the
+  `tests/connections_scope.rs` (5 tests) are budget-protected under the
   repository's 208-test cap (`tests/critical-test-budget.json`); a new test
   must replace a lower-value existing test rather than raise the cap — run
   `pnpm check:test-budget` after a test change.

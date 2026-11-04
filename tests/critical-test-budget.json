@@ -16,12 +16,12 @@
       "protects": "Large-grid virtualization, bounded result-page cache eviction, and keyboard reachability"
     },
     "src/features/providers/tauriAdapter.test.ts": {
-      "tests": 6,
-      "protects": "Provider authority receipts, connection-bound provisioning discovery, exact managed-target authority, actionable control-plane errors, catalog capability projection, parseable managed-import SQL, role-gated managed writes, safe Neon branch soft-delete, strict current backup parsing, identity rejection, restart-free Cloud SQL IAM approval, propagation-safe administrator bootstrap with exact cleanup, active-lease-aware Cloud SQL reconnect preflight and retry timing, keyless GCP bootstrap boundaries, and preservation of existing application ownership and PUBLIC access during Cloud SQL setup; Desktop workspace administration that reaches the control plane only through typed IPC without browser storage or native dialogs, resends only the server's exact bounded IAM-propagation refusal, pins a Cloud SQL repair in memory to one account, workspace and integration for fifteen minutes, accepts only self-consistent Neon bootstrap reports and branch operations, removes a shared database only as its manager with revision pinning and in-app confirmation, shows the write ceiling as status only, binds administration reads to their workspace, and schedules owner-only deletion for the exact workspace name"
+      "tests": 8,
+      "protects": "Provider authority receipts, connection-bound provisioning discovery, exact managed-target authority, actionable control-plane errors, catalog capability projection, parseable managed-import SQL, role-gated managed writes, safe Neon branch soft-delete, strict current backup parsing, identity rejection, restart-free Cloud SQL IAM approval, propagation-safe administrator bootstrap with exact cleanup, active-lease-aware Cloud SQL reconnect preflight and retry timing, keyless GCP bootstrap boundaries, and preservation of existing application ownership and PUBLIC access during Cloud SQL setup; Desktop workspace administration that reaches the control plane only through typed IPC without browser storage or native dialogs, resends only the server's exact bounded IAM-propagation refusal, pins a Cloud SQL repair in memory to one account, workspace and integration for fifteen minutes, accepts only self-consistent Neon bootstrap reports and branch operations, removes a shared database only as its manager with revision pinning and in-app confirmation, shows the write ceiling as status only, binds administration reads to their workspace, and schedules owner-only deletion for the exact workspace name; a member directory accepted only when every member and pending invitation row is well-formed, invitation links limited to http(s), re-invitations that never grant ownership, and provider resources offered only when ready with a known production classification alongside strict GCP permission-check parsing"
     },
     "src/features/queries/tauriAdapter.test.ts": {
-      "tests": 13,
-      "protects": "Safe query proposal, streaming, cancellation, and capability binding; opt-in diagnostic IPC metadata excludes arguments and error payloads, bounds its queue, and discards entries after disable or clear"
+      "tests": 14,
+      "protects": "Safe query proposal, streaming, cancellation, and capability binding; opt-in diagnostic IPC metadata excludes arguments and error payloads, bounds its queue, and discards entries after disable or clear; the stream reducer accepts only the next in-sequence batch of the current run, operation, columns, capability, and consistent decode failures, and completes only on a receipt matching the accepted rows"
     },
     "src/features/query/runSignal.test.ts": {
       "tests": 3,
@@ -32,12 +32,12 @@
       "protects": "Skill install and update decisions without unsafe downgrades"
     },
     "src/features/agents/sessionStore.test.ts": {
-      "tests": 8,
-      "protects": "Exact-scope ACP session isolation, stale-event and stale-focus-intent rejection, idle drafts without adapter startup and single-flight first-prompt startup, adapter-advertised draft configuration and account-scoped mode selection, singleton list/listen ownership, live-only Agent outcome observation, frame-paced partial replies before turn completion and account-switch queue cancellation, bounded projection retention, and incomplete-inventory failure preservation"
+      "tests": 10,
+      "protects": "Exact-scope ACP session isolation, stale-event and stale-focus-intent rejection, idle drafts without adapter startup and single-flight first-prompt startup, adapter-advertised draft configuration and account-scoped mode selection, singleton list/listen ownership, live-only Agent outcome observation, frame-paced partial replies before turn completion and account-switch queue cancellation, bounded projection retention, and incomplete-inventory failure preservation; an approved Agent run reported as stopped only after the executor accepts the stop, with single-use run and foreground-start end callbacks, and SQL proposal receipts recognized only with exact UUID, hash, and operation-state shape within a bounded search depth"
     },
     "src/features/workbench/state.test.ts": {
-      "tests": 5,
-      "protects": "System-default desktop language resolution and preference persistence with explicit-choice preservation, Workbench document identity, save ownership, SQL resolve context, mutually exclusive AppShell route transitions, first-connection Test/engine/Demo contracts including managed BigQuery tooling, typed authentication recovery, and discovered-resource selector fallback, a workspace administration scope bound to the signed-in member of the active team workspace that grants management only to admins and owners and ownership only to owners, with no scope for personal, disabled, membership-less or signed-out states, immutable Analysis snapshot controls, editable-target-safe Action Search shortcuts, Project-level Explorer resource flattening with exact Environment DB badges, member-local drag ordering with contiguous prod/dev schema groups, preferred-Environment Databases-folder drops, and exact shared-connection replacement receipts, 5,000-item loaded-only Explorer search and tree keyboard navigation, common modal title-only native drag isolation, app-lifetime updater single-flight, retry, progress, relaunch, and resource cleanup; Desktop and CLI schema diff parity against one canonical environment fixture; non-destructive tab close with member-local open-tab restore that honours a stored empty set, drops documents deleted elsewhere, and never reopens a tab closed while the document list was still loading"
+      "tests": 6,
+      "protects": "System-default desktop language resolution and preference persistence with explicit-choice preservation, Workbench document identity, save ownership, SQL resolve context, mutually exclusive AppShell route transitions, first-connection Test/engine/Demo contracts including managed BigQuery tooling, typed authentication recovery, and discovered-resource selector fallback, a workspace administration scope bound to the signed-in member of the active team workspace that grants management only to admins and owners and ownership only to owners, with no scope for personal, disabled, membership-less or signed-out states, immutable Analysis snapshot controls, editable-target-safe Action Search shortcuts, Project-level Explorer resource flattening with exact Environment DB badges, member-local drag ordering with contiguous prod/dev schema groups, preferred-Environment Databases-folder drops, and exact shared-connection replacement receipts, 5,000-item loaded-only Explorer search and tree keyboard navigation, common modal title-only native drag isolation, app-lifetime updater single-flight, retry, progress, relaunch, and resource cleanup; Desktop and CLI schema diff parity against one canonical environment fixture; non-destructive tab close with member-local open-tab restore that honours a stored empty set, drops documents deleted elsewhere, and never reopens a tab closed while the document list was still loading; one connection access-issue projection that offers manual credential binding only for readable shared member-local databases, never for view grants, provisioned accounts, or CLI-authenticated engines"
     },
     "src/features/workspaces/authPolicy.test.ts": {
       "tests": 3,
@@ -53,29 +53,53 @@
       "tests": 8,
       "protects": "Versioned public CLI and Cloud↔Desktop sync, managed lease, and Analysis Article wire contracts with fail-closed decoding; schema diff JSON and shared Desktop comparison fixture"
     },
-    "src-tauri/src/broker/session.rs": {
+    "src-tauri/src/broker/session_tests.rs": {
       "tests": 4,
-      "protects": "Capability scope, expiry, redaction, and revocation"
+      "protects": "Capability scope, expiry, redaction (including the registry's own records), and revocation; Agent bootstrap and process-bound authentication fail closed on malformed, mismatched, foreign-runtime, or expired requests, and revoke-all releases every session's proposals exactly once"
+    },
+    "src-tauri/src/broker/discovery.rs": {
+      "tests": 1,
+      "protects": "Broker runtime discovery resolves only product namespaces, publishes atomically with an owner-only 0700 directory and 0600 file, refuses invalid metadata, cleans up a failed replacement, and is removed only by the runtime that owns it"
     },
     "src-tauri/src/broker/external_agent_requests.rs": {
       "tests": 2,
       "protects": "External Agent configure/start approvals stay bounded to four pending requests, are decided exactly once, fail closed on identifier collision or a departed requester, and reject everything on shutdown; external SQL proposals reach only the bounded approval queue of their own approved session, deduplicate re-announcements, never limit in-app sessions, and are released exactly per session on revoke or expiry"
     },
-    "src-tauri/src/connection/runtime/authority.rs": {
-      "tests": 2,
-      "protects": "Provider-local target authority is accepted only for the exact connection, revision, versioned integration, lowercase 64-hex fingerprint, provider, database, engine, bounded expiry, and read-only profile it pins; resolved local credentials cannot change identity, username, secret reference, database, credential mode, connection parameters, Neon host, or verified TLS, and Cloud SQL requires the returned CA"
+    "src-tauri/src/connection/runtime/authority_tests.rs": {
+      "tests": 3,
+      "protects": "Provider-local target authority is accepted only for the exact connection, revision, versioned integration, lowercase 64-hex fingerprint, provider, database, engine, bounded expiry, and read-only profile it pins, is requested only for member-local Neon or Cloud SQL reads, and retires pools inside the authority expiry; binding pins match only the exact account, workspace, integration generation, provider, and fingerprint, and pool cache identities cannot collide across canonical targets; resolved local credentials cannot change identity, username, secret reference, database, credential mode, connection parameters, Neon host, or verified TLS, and Cloud SQL requires the returned CA; authorization refuses unready provisioned accounts, member-local schema changes, and every role or write-gate violation before asking the remote authority, requires an active account and the exact current revision, pins a member-local provider read to a binding for that exact account, and pool opening needs a binding pin, a workspace account before any managed lease, retires a leased pool before the lease, returns it exactly once, and refuses a Cloud SQL connector over an SSH alias before any process starts"
     },
     "src-tauri/src/store/repositories/analysis_articles.rs": {
       "tests": 3,
-      "protects": "Analysis Article result-cache encryption, exact-authority binding, tamper rejection, and invalid-envelope denial"
+      "protects": "Analysis Article result-cache encryption, exact-authority binding of a stored result to its workspace, account partition, Article, revision, run, and result hash in both AAD and plaintext, tamper rejection, and invalid-envelope denial"
     },
     "src-tauri/src/features/providers/adapters/authority_tests.rs": {
       "tests": 4,
-      "protects": "Provider inventory authority, duplicate-key-safe CLI JSON/exit status, literal fixed argv, Unicode/path/executable drift rejection, exact managed-target and connection-pinned receipts, cross-workspace/account scope CAS, restart-safe recovery, deterministic partial destroy repair, and Provider-audit hash-chain correlation"
+      "protects": "Provider inventory authority, duplicate-key-safe CLI JSON/exit status, literal fixed argv, Unicode/path/executable drift rejection, exact managed-target and connection-pinned receipts, cross-workspace/account scope CAS, closed stored provider names and workspace/account/generation-partitioned binding-scope fingerprints, restart-safe recovery, deterministic partial destroy repair, and Provider-audit hash-chain correlation"
     },
     "src-tauri/src/features/queries/domain_tests.rs": {
       "tests": 1,
-      "protects": "Production guidance, namespace safety, current Services result shape, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, the closed loopback engine/port allowlist and printable-version bound of local database discovery, official ACP model/permission-mode allowlists without default escalation, secret-free typed connection-test receipts, opt-in bounded local diagnostics with authentication-material filtering and clear-generation isolation, redacted non-retryable database timeout/cancellation classification across query, Article, and target operations, an authenticated catalog search reaching connection authority resolution within a 1 MiB async worker stack in unoptimized builds, and direct shared-database principal rules (SCRAM and caching_sha2 verifier vectors and exact-format validators, DopeDB-only principal naming, version/scope gates, fixed grant plans without default privileges, and marker/identity ownership proof before any destructive change)"
+      "protects": "Production, busy, unestimated, and over-threshold planning guidance, namespace safety, current Services result shape persisted only for terminal sessions with a consistent result kind, bounded labels, and a complete self-consistent 256-row disk-backed stream handle with a 64-hex capability, frozen Agent plan/run audit actions, desktop stream sink failures that never render as a user cancellation, Knowledge source bindings refused for a foreign, stale, or zero environment revision or an unsafe display name, Analysis Article local results refused without echoing stored bytes, Agent failure codes and closed response languages, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, the closed loopback engine/port allowlist and printable-version bound of local database discovery, official ACP model/permission-mode allowlists without default escalation, secret-free typed connection-test receipts, opt-in bounded local diagnostics with authentication-material filtering and clear-generation isolation, redacted non-retryable database timeout/cancellation classification across query, Article, and target operations, an authenticated catalog search reaching connection authority resolution within a 1 MiB async worker stack in unoptimized builds, and direct shared-database principal rules (SCRAM and caching_sha2 verifier vectors and exact-format validators, DopeDB-only principal naming, version/scope gates, fixed grant plans without default privileges, marker/identity ownership proof before any destructive change, validated marker decoding, and categorical failure codes identical to their stored wire spelling)"
+    },
+    "src-tauri/src/features/connections/domain.rs": {
+      "tests": 1,
+      "protects": "Schema groups never mix database engines or admit BigQuery, an exact CLI connection name resolves to one connection and never to a case variant or an ambiguous guess, and the Agent connection projection carries only its allowlisted fields with no host, user, or secret reference"
+    },
+    "src-tauri/src/features/terminals/domain.rs": {
+      "tests": 1,
+      "protects": "Advanced Shell create requests accept only the exact connection selector and Shell profile, terminal dimensions stay within their bounds, and only exited or failed sessions count as terminal"
+    },
+    "src-tauri/src/features/workspaces/domain.rs": {
+      "tests": 2,
+      "protects": "Hosted membership roles parse only from their exact spelling with editor-or-above team connection creation, the workspace feature flag disables only on explicit off values, member usernames are bounded and control-free, device-only SQLite files never publish, and member-local TLS settings accept only the engine's allowlisted bounded file paths or MongoDB enable flag without smuggling other driver options"
+    },
+    "src-tauri/src/kernel/mod.rs": {
+      "tests": 1,
+      "protects": "Hosted account ids stay bounded and whitespace/control-free when built or decoded, typed UUID identities keep the bare UUID wire shape, SQL namespaces are trimmed byte-bounded control-free data quoted as one identifier, and environment labels map onto the fixed list without a development binding lowering production"
+    },
+    "src-tauri/src/features/workspace_admin/domain/routes_tests.rs": {
+      "tests": 4,
+      "protects": "Workspace administration wire contract: every closed operation reaches exactly one control-plane method, literal/UUID path, query, body, timeout, response cap and pinned revision; Vault always sends verify-full TLS and schema delegation approval never travels without a schema authority; closed role, capability, provider, Neon and GCP values keep their exact spelling and reject every other spelling, including a second query kind; names, confirmations, opaque tokens, idempotency keys, plan hashes and bounded provider payloads fail closed at their UTF-16, character or byte limits; only a signed-in account authorizes; and Debug output never carries a secret, query value or body"
     },
     "src-tauri/src/operations/canonicalize.rs": {
       "tests": 3,
@@ -87,19 +111,23 @@
     },
     "src-tauri/src/safety/l1_parse.rs": {
       "tests": 14,
-      "protects": "Fail-safe SQL classification for high-risk statement shapes and connection startup script session allowlisting"
+      "protects": "Fail-safe SQL classification for high-risk statement shapes (DML or row locks hidden in CTEs and set-expression branches, EXPLAIN ANALYZE options that only an explicit false disables, Unicode-escaped set_config calls, empty or over-nested input, role drops, and unsupported PRAGMA forms), read-only dialect rewrites and Unicode identifiers, impact-preview target eligibility only for exact reads or direct DML, and connection startup script session allowlisting"
     },
     "src-tauri/src/safety/l2_enforce.rs": {
       "tests": 4,
-      "protects": "Result caps, truncation, column presence, numeric precision, and the EXPLAIN-preview opt-out before database access; optional isolated live-MySQL checks exercise Agent and Article transaction setup, write rejection, unchanged data, and cleanup after truncation or errors"
+      "protects": "Result caps, truncation, column presence, numeric precision, the per-engine read-only violation matrix mapped to Blocked, and the EXPLAIN-preview opt-out before database access; optional isolated live-MySQL checks exercise Agent and Article transaction setup, write rejection, unchanged data, and cleanup after truncation or errors"
+    },
+    "src-tauri/src/safety/l3_preview.rs": {
+      "tests": 1,
+      "protects": "Impact previews plan writes without executing them, report the database's own EXPLAIN failure, never plan DDL or privilege changes, and read row estimates in key priority order"
     },
     "src-tauri/src/safety/l4_gate.rs": {
       "tests": 7,
-      "protects": "Write blocking, approval requirements, and privilege denial"
+      "protects": "Write blocking, approval requirements (including reads when auto-run is off), and privilege denial"
     },
     "src-tauri/src/store/tests/connections_scope.rs": {
-      "tests": 4,
-      "protects": "Account isolation, credential binding, managed write projection, scope ABA rejection, GitHub source revision IPC casing and graph-storage retirement preserving current source identities and connections, bounded History/Audit metadata and exact detail reads, streamed audit verification identity, current ACP provider state, strict connection snapshots, unreadable-session isolation, active-session-preserving history pruning, and ordered count/byte-bounded ACP replay batches"
+      "tests": 5,
+      "protects": "Account isolation, credential binding, managed write projection, scope ABA rejection, GitHub source revision IPC casing and graph-storage retirement preserving current source identities and connections, bounded History/Audit metadata and exact detail reads, streamed audit verification identity, current ACP provider state, strict connection snapshots, unreadable-session isolation, active-session-preserving history pruning, ordered count/byte-bounded ACP replay batches, and provisioned principal names and secret bindings that land only on the exact active member's binding without touching other accounts or non-provisioned templates"
     },
     "tools/release-updater-verify/src/main.rs": {
       "tests": 4,

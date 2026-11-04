@@ -21,7 +21,7 @@ general-purpose or always-on database server. Covers `dispatch/` inline.
 | `discovery.rs` | Runtime discovery path, atomic publication, and owner-only permissions for the endpoint file the CLI looks up to find a running Broker. |
 | `peer.rs` | OS peer identity and owner-only endpoint permissions (500 lines). `PeerProcessIdentity` (pid + start time) identifies a connecting peer process cross-platform (Unix and Windows paths), bounded by `MAX_PROCESS_ANCESTORS` when walking process ancestry to confirm a request originates from an authorized descendant process. |
 | `server.rs` | The owner-local UDS/named-pipe server with bounded length-prefixed frames. |
-| `session.rs` | In-memory Terminal session capabilities: the registry, authentication, and revocation. Tokens never enter SQLite, discovery, logs, argv, or serialized broker results — a session's authority lives only in process memory for its lifetime. Its 4 budget-protected tests stay in this file; `test_support` holds the connection-pin fixture dispatch tests share. |
+| `session.rs` | In-memory Terminal session capabilities: the registry, authentication, and revocation. Tokens never enter SQLite, discovery, logs, argv, or serialized broker results — a session's authority lives only in process memory for its lifetime. Its 4 budget-protected tests live in the sibling `session_tests.rs` (kept outside the code-structure size ratchet); `test_support` holds the connection-pin fixture dispatch tests share. |
 | `session/issue.rs` | Capability issuance: mints exact-scope bearer, Agent bootstrap, and process-bound sessions with a positive TTL, and rejects an Agent write target outside the selected Project resources. |
 | `session/proposals.rs` | Proposal ledger and liveness: remembers the operations each session proposed and reports every removed session (revoked, closed, or expired, including by the periodic expiry sweep) with them as a `SessionRevocation`; implements `AgentSessionLiveness` for approval- and claim-time rechecks. |
 | `external_agent_requests.rs` | In-memory handoff between owner-local Broker requests and the Desktop approval UI (for `dopedb agent start`-style external Agent bootstrap requests). Queued proposals keep their session, are released when it is removed by any path, and are never dropped for space: a full queue refuses the next proposal before it is created. A live external session's identity is never evicted either (an evicted one would look in-app and its proposals would reach no approval surface); every session removal releases it. |
@@ -81,9 +81,10 @@ handler.
 ### Testing Requirements
 
 - `pnpm test:rust` (`cargo test --package dopedb --lib`) runs this module.
-  `session.rs` (4 tests) and `external_agent_requests.rs` (2 tests — bounded,
-  exactly-once external approvals and per-session proposal queues) are
-  budget-protected under the repository's 208-test cap
+  `session_tests.rs` (4 tests for `session.rs`), `discovery.rs` (1 test — owner-only atomic runtime
+  file publication and owner-only removal), and `external_agent_requests.rs`
+  (2 tests — bounded, exactly-once external approvals and per-session proposal
+  queues) are budget-protected under the repository's 208-test cap
   (`tests/critical-test-budget.json`); a new test here must replace a
   lower-value existing test rather than raise the cap — run
   `pnpm check:test-budget` after a test change. `dispatch/mod.rs` also exposes

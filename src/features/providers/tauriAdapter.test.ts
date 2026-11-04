@@ -141,7 +141,16 @@ import {
   workspaceId as workspaceIdentity,
 } from "../workspaces/domain";
 import { sharedDatabasesQuery } from "../workspaceAdmin/access/queries";
-import { parseMemberDirectory } from "../workspaceAdmin/members/domain";
+import {
+  formatMemberDate,
+  invitationExpired,
+  memberDisplayName,
+  MemberDirectoryShapeError,
+  normalizeInviteEmail,
+  parseCreatedInvitation,
+  parseMemberDirectory,
+  reinviteRole,
+} from "../workspaceAdmin/members/domain";
 import { workspaceAdminSectionsFor } from "../workspaceAdmin/sections";
 import {
   connectableProvider,
@@ -150,12 +159,18 @@ import {
   providerAccountGroups,
 } from "../workspaceAdmin/providers/accounts/accountModel";
 import {
+  emptyVault,
   gcpActiveLeaseRetryMessage,
   parseGcpActiveLeaseConflict,
   parseNeonBootstrapApply,
+  parseGcpSetupPermissionCheck,
   parseNeonBootstrapPreflight,
+  providerImportDisplayName,
+  selectableProviderResources,
+  vaultConfigurationRequest,
   type Integration,
   type Provider,
+  type Resource,
 } from "../workspaceAdmin/providers/domain";
 import {
   GcpBootstrapCancelled,
@@ -2011,6 +2026,7 @@ describe("provider credential Tauri adapter", () => {
       { ...neonPreflight, report: { ...neonReport, requiresPublicAclApproval: false } },
       { ...neonPreflight, report: { ...neonReport, findings: [{ ...neonFinding, level: "blocker" }] } },
       { ...neonPreflight, report: { ...neonReport, production: true } },
+      { ...neonPreflight, report: { ...neonReport, findings: [{ ...neonFinding, code: "neon_lowercase" }] } },
     ]) {
       expect(parseNeonBootstrapPreflight(forged)).toBeNull();
     }
@@ -2722,5 +2738,190 @@ describe("provider credential Tauri adapter", () => {
     expect(desktopSettingsSource).toContain('t("settings.selectConnection")');
     expect(workspaceSnapshotRestoreSource).toContain("readonlyDefault: true");
     expect(workspaceSnapshotRestoreSource).toContain("allowWrites: false");
+  });
+
+  it("accepts a member directory only when every row is well-formed and never re-invites an owner", () => {
+    const workspace = "6b8f1c2e-3d4a-4b5c-8d6e-7f8091a2b3c4";
+    const member = {
+      id: "0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d",
+      userId: "user-1",
+      name: "",
+      email: "member@example.test",
+      role: "editor",
+      createdAt: "2026-03-04T05:06:00Z",
+    };
+    const invitation = {
+      id: "1a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d",
+      email: "invitee@example.test",
+      role: "viewer",
+      status: "pending",
+      expiresAt: "2026-03-05T05:06:00Z",
+      createdAt: "2026-03-04T05:06:00Z",
+      inviteUrl: "https://workspace.example.test/invite/token",
+    };
+    const directory = (members: unknown[], invitations: unknown[]) => ({
+      workspaceId: workspace.toUpperCase(),
+      members,
+      invitations,
+    });
+    expect(parseMemberDirectory(directory([member], [invitation]), workspace)).toEqual({
+      members: [member],
+      invitations: [{
+        id: invitation.id,
+        email: invitation.email,
+        role: "viewer",
+        expiresAt: invitation.expiresAt,
+        createdAt: invitation.createdAt,
+        inviteUrl: invitation.inviteUrl,
+      }],
+    });
+    expect(parseMemberDirectory(directory([], [{ ...invitation, role: null }]), workspace)
+      .invitations[0].role).toBeNull();
+    const forgedMembers = [
+      null,
+      [member],
+      { ...member, id: "member-1" },
+      { ...member, userId: "" },
+      { ...member, name: "n".repeat(513) },
+      { ...member, email: " " },
+      { ...member, role: "superuser" },
+      { ...member, createdAt: "yesterday" },
+    ];
+    const forgedInvitations = [
+      { ...invitation, status: "accepted" },
+      { ...invitation, role: "superuser" },
+      { ...invitation, expiresAt: "soon" },
+      { ...invitation, createdAt: null },
+      { ...invitation, inviteUrl: "javascript:alert(1)" },
+      { ...invitation, inviteUrl: "not a url" },
+    ];
+    // One malformed row rejects the whole directory instead of hiding a member.
+    for (const forged of forgedMembers) {
+      expect(() => parseMemberDirectory(directory([member, forged], []), workspace))
+        .toThrow(MemberDirectoryShapeError);
+    }
+    for (const forged of forgedInvitations) {
+      expect(() => parseMemberDirectory(directory([member], [forged]), workspace))
+        .toThrow(MemberDirectoryShapeError);
+    }
+    expect(() => parseMemberDirectory({ ...directory([], []), invitations: null }, workspace))
+      .toThrow(MemberDirectoryShapeError);
+
+    const created = { invitation: { ...invitation, role: undefined } };
+    expect(parseCreatedInvitation(created)).toEqual({
+      id: invitation.id,
+      role: null,
+      expiresAt: invitation.expiresAt,
+      inviteUrl: invitation.inviteUrl,
+    });
+    for (const forged of [
+      null,
+      { invitation: { ...invitation, id: "invite-1" } },
+      { invitation: { ...invitation, role: "owner-plus" } },
+      { invitation: { ...invitation, expiresAt: "" } },
+      { invitation: { ...invitation, inviteUrl: "file:///etc/passwd" } },
+    ]) {
+      expect(parseCreatedInvitation(forged)).toBeNull();
+    }
+
+    expect(normalizeInviteEmail("  Person@Example.TEST ")).toBe("person@example.test");
+    for (const refused of ["person@example", "person example.test", "a\u0007b@example.test", `${"a".repeat(310)}@example.test`]) {
+      expect(normalizeInviteEmail(refused)).toBeNull();
+    }
+    const expiresAt = Date.parse(invitation.expiresAt);
+    expect(invitationExpired(invitation, expiresAt - 1)).toBe(false);
+    expect(invitationExpired(invitation, expiresAt)).toBe(true);
+    expect(reinviteRole("owner")).toBe("analyst");
+    expect(reinviteRole(null)).toBe("analyst");
+    expect(reinviteRole("viewer")).toBe("viewer");
+    expect(memberDisplayName(member)).toBe(member.email);
+    expect(memberDisplayName({ ...member, name: " Kim " })).toBe("Kim");
+    expect(formatMemberDate(member.createdAt, "en")).toContain("2026");
+    expect(formatMemberDate(member.createdAt, "en")).not.toMatch(/\d:\d{2}/);
+    expect(formatMemberDate(member.createdAt, "en", true)).toMatch(/\d:\d{2}/);
+  });
+
+  it("offers only ready, classified provider resources and parses GCP permission checks strictly", () => {
+    const leaf = (overrides: Partial<Resource>): Resource => ({
+      id: "resource",
+      name: "resource",
+      value: "resource",
+      kind: "postgres",
+      ready: true,
+      production: false,
+      ...overrides,
+    });
+    const items = [
+      leaf({ id: "dev" }),
+      leaf({ id: "prod", production: true }),
+      leaf({ id: "unknown", production: "unknown" }),
+      leaf({ id: "unready", ready: false }),
+      leaf({ id: "unclassified", production: undefined }),
+      leaf({ id: "mysql", kind: "mysql" }),
+    ];
+    const ids = (selected: Resource[]) => selected.map((item) => item.id);
+    // An unknown production classification must never look non-production.
+    expect(ids(selectableProviderResources(items, true, ["postgres"]))).toEqual(["dev", "prod"]);
+    expect(ids(selectableProviderResources(items, true, ["postgres"], true)))
+      .toEqual(["dev", "prod", "unknown"]);
+    expect(ids(selectableProviderResources(items, false, ["postgres", "mysql"])))
+      .toEqual(items.map((item) => item.id));
+    expect(providerImportDisplayName("Neon", " main\u0000\n branch ")).toBe("Neon · main branch");
+    expect(providerImportDisplayName("Neon", "x".repeat(200))).toHaveLength(120);
+
+    const requirement = {
+      role: "roles/cloudsql.admin",
+      label: "Cloud SQL Admin",
+      purpose: "Create the DopeDB principal",
+      missingPermissions: ["cloudsql.users.create"],
+    };
+    const check = {
+      account: "admin@example.test",
+      projectId: "project-1",
+      canAutoGrant: false,
+      missing: [requirement],
+    };
+    expect(parseGcpSetupPermissionCheck(check)).toEqual(check);
+    for (const forged of [
+      null,
+      [check],
+      { ...check, canAutoGrant: "yes" },
+      { ...check, missing: Array.from({ length: 6 }, () => requirement) },
+      { ...check, missing: [null] },
+      { ...check, missing: [{ ...requirement, label: 1 }] },
+      { ...check, missing: [{ ...requirement, missingPermissions: [1] }] },
+      { ...check, missing: [{ ...requirement, missingPermissions: Array.from({ length: 9 }, () => "p") }] },
+    ]) {
+      expect(parseGcpSetupPermissionCheck(forged)).toBeNull();
+    }
+
+    expect(vaultConfigurationRequest({
+      ...emptyVault,
+      address: " https://vault.example.test ",
+      namespace: "  ",
+      roleId: " role ",
+      readRole: " reader ",
+      writeRole: " ",
+      host: " db.example.test ",
+      port: "6543",
+      database: " app ",
+    })).toEqual({
+      address: "https://vault.example.test",
+      namespace: null,
+      authMount: "approle",
+      roleId: "role",
+      secretId: "",
+      databaseMount: "database",
+      databaseConnection: "",
+      readRole: "reader",
+      writeRole: null,
+      target: {
+        host: "db.example.test",
+        port: 6543,
+        database: "app",
+        engine: "postgres",
+        production: false,
+      },
+    });
   });
 });

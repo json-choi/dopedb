@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "target": 90,
+    "rule": "Lists the security-boundary and wire-contract code whose unit-test line coverage must reach the target, measured as each side's (Rust, frontend) total over the listed files. Coverage comes from tests that assert an invariant, never from assertion-free calls. Adding a file or exclusion needs a reason; tests still obey tests/critical-test-budget.json.",
+    "integrationOnly": "Functions, or named branches of a function, that need a live database, network service, OS keychain, or child process are left out of the target with the reason. This manifest does not claim they are covered; they need an integration suite. A name must match exactly one production function and a branch exactly one line in it."
+  },
+  "rust": {
+    "files": [
+      "src-tauri/src/broker/discovery.rs",
+      "src-tauri/src/broker/external_agent_requests.rs",
+      "src-tauri/src/broker/session.rs",
+      "src-tauri/src/connection/provider_local.rs",
+      "src-tauri/src/connection/runtime/authority.rs",
+      "src-tauri/src/features/agents/domain.rs",
+      "src-tauri/src/features/analysis_articles/domain.rs",
+      "src-tauri/src/features/connections/domain.rs",
+      "src-tauri/src/features/direct_access/domain.rs",
+      "src-tauri/src/features/knowledge/domain.rs",
+      "src-tauri/src/features/providers/domain.rs",
+      "src-tauri/src/features/queries/domain.rs",
+      "src-tauri/src/features/terminals/domain.rs",
+      "src-tauri/src/features/workspace_admin/domain.rs",
+      "src-tauri/src/features/workspace_admin/domain/routes.rs",
+      "src-tauri/src/features/workspace_admin/domain/values.rs",
+      "src-tauri/src/features/workspaces/domain.rs",
+      "src-tauri/src/kernel/access.rs",
+      "src-tauri/src/kernel/environment.rs",
+      "src-tauri/src/kernel/identity.rs",
+      "src-tauri/src/kernel/sql_namespace.rs",
+      "src-tauri/src/kernel/sync.rs",
+      "src-tauri/src/operations/canonicalize.rs",
+      "src-tauri/src/operations/state_machine.rs",
+      "src-tauri/src/safety/l1_parse.rs",
+      "src-tauri/src/safety/l1_pragma.rs",
+      "src-tauri/src/safety/l1_rewrite.rs",
+      "src-tauri/src/safety/l1_statement_kinds.rs",
+      "src-tauri/src/safety/l1_tables.rs",
+      "src-tauri/src/safety/l2_enforce.rs",
+      "src-tauri/src/safety/l3_preview.rs",
+      "src-tauri/src/safety/l4_gate.rs",
+      "src-tauri/src/store/repositories/analysis_articles.rs",
+      "src-tauri/src/store/repositories/direct_access.rs"
+    ],
+    "integrationOnly": {
+      "src-tauri/src/safety/l2_enforce.rs": {
+        "run_read_only_cancellable": {
+          "reason": "The BigQuery and Cloudflare D1 branches call those services over the network",
+          "branches": [
+            "if let PoolRef::Bigquery",
+            "if let PoolRef::CloudflareD1"
+          ]
+        },
+        "run_read_only_byte_capped_cancellable": {
+          "reason": "The BigQuery branch calls BigQuery over the network. The Cloudflare D1 branch needs a D1 HTTP response, including its row byte cap",
+          "branches": [
+            "if let PoolRef::Bigquery",
+            "if let PoolRef::CloudflareD1"
+          ]
+        },
+        "run_read_only_byte_capped_inner": {
+          "reason": "The Postgres and MySQL read-only transaction branches need a live server; the SQLite branch is unit tested",
+          "branches": [
+            "PoolRef::Postgres",
+            "PoolRef::Mysql"
+          ]
+        },
+        "run_read_only_inner": {
+          "reason": "The Postgres and MySQL read-only transaction branches need a live server; the SQLite branch is unit tested",
+          "branches": [
+            "PoolRef::Postgres",
+            "PoolRef::Mysql"
+          ]
+        }
+      },
+      "src-tauri/src/safety/l3_preview.rs": {
+        "explain": {
+          "reason": "Postgres, MySQL, BigQuery, and Cloudflare D1 EXPLAIN or dry-run need a live target; the SQLite branch is unit tested",
+          "branches": [
+            "PoolRef::Postgres",
+            "PoolRef::Mysql",
+            "PoolRef::Bigquery",
+            "PoolRef::CloudflareD1"
+          ]
+        }
+      },
+      "src-tauri/src/store/repositories/analysis_articles.rs": {
+        "save_analysis_article_local_result": "Fetches the result-cache key from the OS keychain (a home-directory dev-secrets file in debug builds) before encrypting",
+        "load_analysis_article_local_result": "Fetches the result-cache key from the OS keychain (a home-directory dev-secrets file in debug builds) before decrypting"
+      }
+    }
+  },
+  "frontend": {
+    "files": [
+      "src/features/agents/approvalActivity.ts",
+      "src/features/agents/sessionFocus.ts",
+      "src/features/agents/sqlProposal.ts",
+      "src/features/connections/domain.ts",
+      "src/features/providers/domain.ts",
+      "src/features/queries/domain.ts",
+      "src/features/query/runSignal.ts",
+      "src/features/safetySettings/policy.ts",
+      "src/features/skills/setupPolicy.ts",
+      "src/features/workspaceAdmin/members/domain.ts",
+      "src/features/workspaceAdmin/providers/domain.ts",
+      "src/features/workspaces/authPolicy.ts"
+    ]
+  }
+}

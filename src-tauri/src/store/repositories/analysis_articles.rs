@@ -281,6 +281,172 @@ mod tests {
         assert_eq!(decrypt(&key, aad, &nonce, &ciphertext).unwrap(), plaintext);
         assert!(decrypt(&key, b"different-account", &nonce, &ciphertext).is_err());
         super::super::personal_analysis_articles::assert_personal_article_contract().await;
+        assert_local_result_is_bound_to_exact_authority(&key).await;
+    }
+
+    fn receipt(article_id: Uuid, article_revision: i64, run_id: Uuid) -> serde_json::Value {
+        serde_json::json!({
+            "runId": run_id,
+            "articleId": article_id,
+            "articleRevision": article_revision,
+            "queryReceipts": [],
+            "result": {"columns": [], "rows": [], "truncated": false},
+            "resultHash": "result-hash",
+            "startedAt": "2026-07-24T00:00:00Z",
+            "finishedAt": "2026-07-24T00:00:01Z",
+        })
+    }
+
+    struct StoredResult {
+        article_revision: i64,
+        run_id: Uuid,
+        result_hash: &'static str,
+        nonce: Vec<u8>,
+        ciphertext: Vec<u8>,
+    }
+
+    async fn stored_row(pool: &SqlitePool, stored: &StoredResult) -> sqlx::sqlite::SqliteRow {
+        sqlx::query(
+            "SELECT ?1 AS article_revision, ?2 AS run_id, ?3 AS result_hash,
+                    ?4 AS nonce, ?5 AS ciphertext",
+        )
+        .bind(stored.article_revision)
+        .bind(stored.run_id.to_string())
+        .bind(stored.result_hash)
+        .bind(&stored.nonce)
+        .bind(&stored.ciphertext)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    /// A cached result decodes only under the workspace, account partition,
+    /// Article, revision, run, and result hash it was sealed for, and its
+    /// plaintext must repeat that same authority.
+    async fn assert_local_result_is_bound_to_exact_authority(key: &Zeroizing<[u8; 32]>) {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let workspace_id = Uuid::new_v4();
+        let article_id = Uuid::new_v4();
+        let run_id = Uuid::new_v4();
+        let seal = |plaintext: &serde_json::Value, revision: i64, run_id: Uuid, hash: &str| {
+            let aad = cache_aad(workspace_id, "personal", article_id, revision, run_id, hash);
+            encrypt(key, &aad, &serde_json::to_vec(plaintext).unwrap()).unwrap()
+        };
+        let (nonce, ciphertext) = seal(&receipt(article_id, 2, run_id), 2, run_id, "result-hash");
+        let exact = StoredResult {
+            article_revision: 2,
+            run_id,
+            result_hash: "result-hash",
+            nonce,
+            ciphertext,
+        };
+        let row = stored_row(&pool, &exact).await;
+        let decoded = decode_local_result(key, workspace_id, "personal", article_id, &row).unwrap();
+        assert_eq!(
+            (decoded.article_id, decoded.article_revision, decoded.run_id),
+            (article_id, 2, run_id)
+        );
+        assert_eq!(decoded.result_hash, "result-hash");
+
+        let foreign_authorities = [
+            ("another workspace", Uuid::new_v4(), "personal", article_id),
+            (
+                "another account partition",
+                workspace_id,
+                "team:other",
+                article_id,
+            ),
+            ("another Article", workspace_id, "personal", Uuid::new_v4()),
+        ];
+        for (label, workspace, account, article) in foreign_authorities {
+            assert!(
+                decode_local_result(key, workspace, account, article, &row).is_err(),
+                "{label} must not decrypt the entry"
+            );
+        }
+        assert!(
+            decode_local_result(
+                &Zeroizing::new([9; 32]),
+                workspace_id,
+                "personal",
+                article_id,
+                &row
+            )
+            .is_err(),
+            "another device key must not decrypt the entry"
+        );
+
+        // Rewriting the stored authority columns breaks the AAD binding.
+        let rewritten = [
+            StoredResult {
+                article_revision: 3,
+                ..clone_stored(&exact)
+            },
+            StoredResult {
+                run_id: Uuid::new_v4(),
+                ..clone_stored(&exact)
+            },
+            StoredResult {
+                result_hash: "other-hash",
+                ..clone_stored(&exact)
+            },
+        ];
+        for stored in rewritten {
+            let row = stored_row(&pool, &stored).await;
+            assert!(decode_local_result(key, workspace_id, "personal", article_id, &row).is_err());
+        }
+
+        // A correctly sealed plaintext that names different authority is refused.
+        let other_run = Uuid::new_v4();
+        let mut wrong_hash = receipt(article_id, 2, run_id);
+        wrong_hash["resultHash"] = "other-hash".into();
+        let mismatched = [
+            ("another Article", receipt(Uuid::new_v4(), 2, run_id)),
+            ("another revision", receipt(article_id, 5, run_id)),
+            ("another run", receipt(article_id, 2, other_run)),
+            ("another result hash", wrong_hash),
+            ("an unsupported format", serde_json::json!({"rows": []})),
+        ];
+        for (label, plaintext) in mismatched {
+            let (nonce, ciphertext) = seal(&plaintext, 2, run_id, "result-hash");
+            let row = stored_row(
+                &pool,
+                &StoredResult {
+                    nonce,
+                    ciphertext,
+                    ..clone_stored(&exact)
+                },
+            )
+            .await;
+            assert!(
+                decode_local_result(key, workspace_id, "personal", article_id, &row).is_err(),
+                "{label} must be refused"
+            );
+        }
+
+        // Every authority field is part of the versioned AAD.
+        let base = cache_aad(workspace_id, "personal", article_id, 2, run_id, "h");
+        assert!(base.starts_with(b"dopedb.analysis-result.v1\0"));
+        let variants = [
+            cache_aad(Uuid::new_v4(), "personal", article_id, 2, run_id, "h"),
+            cache_aad(workspace_id, "team", article_id, 2, run_id, "h"),
+            cache_aad(workspace_id, "personal", Uuid::new_v4(), 2, run_id, "h"),
+            cache_aad(workspace_id, "personal", article_id, 3, run_id, "h"),
+            cache_aad(workspace_id, "personal", article_id, 2, Uuid::new_v4(), "h"),
+            cache_aad(workspace_id, "personal", article_id, 2, run_id, "i"),
+        ];
+        assert!(variants.iter().all(|variant| *variant != base));
+        pool.close().await;
+    }
+
+    fn clone_stored(stored: &StoredResult) -> StoredResult {
+        StoredResult {
+            article_revision: stored.article_revision,
+            run_id: stored.run_id,
+            result_hash: stored.result_hash,
+            nonce: stored.nonce.clone(),
+            ciphertext: stored.ciphertext.clone(),
+        }
     }
 
     #[test]
