@@ -264,3 +264,166 @@ impl ExternalAgentRequestRegistry {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(kind: ExternalAgentRequestKind) -> ExternalAgentRequestSummary {
+        ExternalAgentRequestSummary {
+            id: Uuid::new_v4(),
+            kind,
+            provider: ExternalAgentProvider::Codex,
+            working_directory: "/workspace/project".into(),
+            config: None,
+            proposal: None,
+        }
+    }
+
+    fn proposal() -> ExternalAgentProposalReference {
+        ExternalAgentProposalReference {
+            operation_id: Uuid::new_v4(),
+            connection_id: Uuid::new_v4(),
+            payload_hash: "ab".repeat(32),
+            state: OperationState::PendingApproval,
+        }
+    }
+
+    fn blocked(result: AppResult<impl Sized>) -> String {
+        match result {
+            Err(AppError::Blocked { reason }) => reason,
+            Err(other) => panic!("expected a blocked decision, got {other:?}"),
+            Ok(_) => panic!("expected a blocked decision, got success"),
+        }
+    }
+
+    #[test]
+    fn blocking_requests_are_bounded_and_decided_exactly_once() {
+        let registry = ExternalAgentRequestRegistry::default();
+        let first = request(ExternalAgentRequestKind::Start);
+        let first_id = first.id;
+        let mut first_receiver = registry.begin(first).unwrap();
+        let mut others = (0..MAX_PENDING_REQUESTS - 1)
+            .map(|_| {
+                registry
+                    .begin(request(ExternalAgentRequestKind::Configure))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            blocked(registry.begin(request(ExternalAgentRequestKind::Start))).contains("too many")
+        );
+
+        registry
+            .respond(first_id, ExternalAgentRequestDecision::Approved(None))
+            .unwrap();
+        assert!(matches!(
+            first_receiver.try_recv(),
+            Ok(ExternalAgentRequestDecision::Approved(None))
+        ));
+        assert!(
+            blocked(registry.respond(first_id, ExternalAgentRequestDecision::Rejected))
+                .contains("already answered")
+        );
+        assert!(
+            blocked(registry.respond(Uuid::new_v4(), ExternalAgentRequestDecision::Rejected))
+                .contains("no longer pending")
+        );
+
+        // A requester that already stopped never receives a late approval.
+        registry.finish(first_id);
+        let gone = request(ExternalAgentRequestKind::Start);
+        let gone_id = gone.id;
+        drop(registry.begin(gone).unwrap());
+        blocked(registry.respond(gone_id, ExternalAgentRequestDecision::Approved(None)));
+        registry.finish(gone_id);
+
+        registry.reject_all();
+        assert!(registry.list().is_empty());
+        for receiver in &mut others {
+            assert!(matches!(
+                receiver.try_recv(),
+                Ok(ExternalAgentRequestDecision::Rejected)
+            ));
+        }
+
+        // An identifier collision fails closed instead of rebinding the decision.
+        let collision = request(ExternalAgentRequestKind::Start);
+        let collision_id = collision.id;
+        let mut original = registry.begin(collision.clone()).unwrap();
+        assert!(matches!(
+            registry.begin(collision),
+            Err(AppError::Config(_))
+        ));
+        blocked(registry.respond(collision_id, ExternalAgentRequestDecision::Approved(None)));
+        assert!(original.try_recv().is_err());
+    }
+
+    #[test]
+    fn external_proposals_reach_only_their_own_bounded_approval_queue() {
+        let registry = ExternalAgentRequestRegistry::default();
+        let in_app = TerminalSessionId::from(Uuid::new_v4());
+        assert!(registry.enqueue_proposal(in_app, proposal()).is_none());
+
+        let external = TerminalSessionId::from(Uuid::new_v4());
+        let other = TerminalSessionId::from(Uuid::new_v4());
+        registry.register_external_session(
+            external,
+            ExternalAgentProvider::Claude,
+            "/workspace/external".into(),
+        );
+        registry.register_external_session(
+            other,
+            ExternalAgentProvider::Codex,
+            "/workspace/other".into(),
+        );
+        let entry = registry.enqueue_proposal(external, proposal()).unwrap();
+        assert_eq!(entry.kind, ExternalAgentRequestKind::Proposal);
+        assert_eq!(entry.provider, ExternalAgentProvider::Claude);
+        assert_eq!(entry.working_directory, "/workspace/external");
+        let other_entry = registry.enqueue_proposal(other, proposal()).unwrap();
+
+        // A re-announced operation keeps one queue entry.
+        let repeated = proposal();
+        registry
+            .enqueue_proposal(external, repeated.clone())
+            .unwrap();
+        registry
+            .enqueue_proposal(external, repeated.clone())
+            .unwrap();
+        assert_eq!(registry.list().len(), 3);
+
+        while registry.accepts_proposal(external) {
+            registry.enqueue_proposal(external, proposal()).unwrap();
+        }
+        assert_eq!(registry.list().len(), MAX_QUEUED_PROPOSALS);
+        assert!(!registry.accepts_proposal(other));
+        // In-app sessions show proposals in their transcript and are never limited here.
+        assert!(registry.accepts_proposal(in_app));
+
+        // Blocking requests are listed before queued proposals.
+        let pending = request(ExternalAgentRequestKind::Configure);
+        let pending_id = pending.id;
+        let _receiver = registry.begin(pending).unwrap();
+        assert_eq!(registry.list()[0].id, pending_id);
+
+        assert!(registry.dismiss_proposal(other_entry.id));
+        assert!(!registry.dismiss_proposal(other_entry.id));
+
+        // Forgetting a session releases exactly its own proposals.
+        let released = registry.forget_external_session(external);
+        assert_eq!(released.len(), MAX_QUEUED_PROPOSALS - 1);
+        assert!(released.contains(&entry.id));
+        assert!(released.contains(&repeated.operation_id));
+        assert_eq!(
+            registry
+                .list()
+                .iter()
+                .map(|item| item.id)
+                .collect::<Vec<_>>(),
+            vec![pending_id]
+        );
+        assert!(registry.enqueue_proposal(external, proposal()).is_none());
+        assert!(registry.enqueue_proposal(other, proposal()).is_some());
+    }
+}

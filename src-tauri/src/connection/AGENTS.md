@@ -79,7 +79,7 @@ and last-lease retirement mechanics.
 
 ### Testing Requirements
 
-- Covered indirectly by `pnpm test:rust` (`cargo test --package dopedb --lib`); four files in this module hold `#[cfg(test)]` blocks, none separately tracked in `tests/critical-test-budget.json`.
+- Covered by `pnpm test:rust` (`cargo test --package dopedb --lib`). `runtime/authority.rs` is budget-protected under the repository's 208-test cap (`tests/critical-test-budget.json`, 2 tests: provider-local target pinning and resolved-credential identity/TLS validation); the other `#[cfg(test)]` blocks in `keychain.rs`, `mod.rs`, `runtime.rs`, and `runtime_policy.rs` are untracked helpers. A new test must replace a lower-value existing test rather than raise the cap — run `pnpm check:test-budget` after a test change.
 
 ## Dependencies
 
