@@ -9,7 +9,7 @@
 //   pnpm coverage:critical -- --details    also list uncovered functions per file
 //   pnpm coverage:critical -- --reuse      read the last reports instead of re-running
 //
-// Rust lines inside `#[cfg(test)]` modules and functions listed under
+// Rust lines inside `#[cfg(test)]` modules, functions, and impls, and functions listed under
 // `rust.integrationOnly` are left out of the totals.
 
 import { spawnSync } from "node:child_process";
@@ -96,7 +96,9 @@ function rustStructure(file) {
     if (!/^\s*#\[cfg\(test\)\]\s*$/u.test(lines[index])) continue;
     let next = index + 1;
     while (next < lines.length && /^\s*#\[/u.test(lines[next])) next += 1;
-    if (/^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{/u.test(lines[next] ?? "")) {
+    // A test-only module, function, or impl block; `mod x;` pointing at
+    // another file ends at its own line.
+    if (/^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:mod|fn|impl)\b/u.test(lines[next] ?? "")) {
       testRanges.push([index + 1, braceEnd(lines, next) + 1]);
     }
   }
