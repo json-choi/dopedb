@@ -576,10 +576,237 @@ mod tests {
         }
     }
 
-    #[test]
-    fn provider_target_metadata_must_match_the_exact_read_only_pin() {
+    fn binding_pin(
+        account_id: &AccountId,
+        workspace_id: WorkspaceId,
+        target: &ProviderLocalTarget,
+    ) -> crate::connection::provider_local::ProviderLocalBindingPin {
+        crate::connection::provider_local::ProviderLocalBindingPin {
+            binding_id: crate::kernel::identity::ProviderBindingId::from(Uuid::new_v4()),
+            binding_revision: 1,
+            account_id: account_id.clone(),
+            workspace_id,
+            integration_id: target.integration_id,
+            integration_generation: target.integration_generation,
+            provider: target.provider,
+            resource_fingerprint: target.resource_fingerprint.clone(),
+        }
+    }
+
+    #[tokio::test]
+    async fn provider_target_metadata_must_match_the_exact_read_only_pin() {
         let pin = neon_pin();
         validate_provider_local_target(&pin, &neon_target(&pin)).unwrap();
+
+        // Only a member-local Neon or Cloud SQL read on a remote-RBAC pin asks
+        // for a provider-local target; every other access keeps its own path.
+        assert!(requires_provider_local_target(&pin, ConnectionAccess::Read));
+        type RequiresCase = (&'static str, fn(&mut PinnedConnection), ConnectionAccess);
+        let requires_cases: [RequiresCase; 5] = [
+            ("a write", |_| {}, ConnectionAccess::Write),
+            ("a schema change", |_| {}, ConnectionAccess::Schema),
+            (
+                "a local pin",
+                |p| p.requires_remote_rbac = false,
+                ConnectionAccess::Read,
+            ),
+            (
+                "managed credentials",
+                |p| p.profile.credential_mode = WorkspaceCredentialMode::Managed,
+                ConnectionAccess::Read,
+            ),
+            (
+                "a generic provider",
+                |p| p.profile.provider = Provider::Generic,
+                ConnectionAccess::Read,
+            ),
+        ];
+        for (label, mutate, access) in requires_cases {
+            let mut other = neon_pin();
+            mutate(&mut other);
+            assert!(
+                !requires_provider_local_target(&other, access),
+                "{label} must not use a provider-local target"
+            );
+        }
+        let mut cloud_sql = neon_pin();
+        cloud_sql.profile.provider = Provider::GcpCloudSql;
+        assert!(requires_provider_local_target(
+            &cloud_sql,
+            ConnectionAccess::Read
+        ));
+        assert!(matches!(
+            scope_changed(),
+            AppError::Blocked { reason } if reason.contains("access changed")
+        ));
+
+        // The authority expiry must sit inside a bounded window, and a pool is
+        // retired fifteen seconds before the authority itself expires.
+        for (seconds, accepted) in [(-5, false), (20, false), (300, true), (400, false)] {
+            let mut target = neon_target(&pin);
+            target.expires_at = Utc::now() + chrono::Duration::seconds(seconds);
+            assert_eq!(
+                target.cache_retire_after().is_ok(),
+                accepted,
+                "expiry {seconds}s"
+            );
+        }
+        let retire_after = neon_target(&pin).cache_retire_after().unwrap();
+        assert!(
+            (Duration::from_secs(100)..=Duration::from_secs(105)).contains(&retire_after),
+            "retire margin applied: {retire_after:?}"
+        );
+
+        // A cached pool is reused only while its deadline is not later than the
+        // fresh authority; a pool without a deadline is never reused for one.
+        let target = neon_target(&pin);
+        let mut too_long = neon_target(&pin);
+        too_long.expires_at = Utc::now() + chrono::Duration::minutes(10);
+        let sqlite = ConnectionProfile {
+            engine: Engine::Sqlite,
+            provider: Provider::Auto,
+            database: ":memory:".into(),
+            sslmode: "disable".into(),
+            ..neon_pin().profile
+        };
+        for (label, retire_at, shrank) in [
+            ("no deadline", None, true),
+            ("an earlier deadline", Some(Duration::from_secs(10)), false),
+            ("a later deadline", Some(Duration::from_secs(3_600)), true),
+        ] {
+            let retire_at = retire_at.map(|after| Instant::now() + after);
+            let profile = &sqlite;
+            let live = || async move {
+                crate::driver::connect(profile, "", ConnectionAccess::Read, None, None)
+                    .await
+                    .unwrap()
+            };
+            let entry = CacheEntry {
+                live: live().await,
+                generation: 1,
+                retire_at,
+                managed_lease: std::sync::Mutex::new(None),
+                ssh_tunnel: std::sync::Mutex::new(None),
+                cloud_sql_proxy: std::sync::Mutex::new(None),
+                closed: std::sync::atomic::AtomicBool::new(false),
+            };
+            let opened = OpenedLive {
+                live: live().await,
+                retire_at,
+                managed_lease: None,
+                ssh_tunnel: None,
+                cloud_sql_proxy: None,
+            };
+            assert_eq!(
+                provider_target_expiry_shrank(&entry, Some(&target)).unwrap(),
+                shrank,
+                "cached pool with {label}"
+            );
+            assert_eq!(
+                opened_provider_target_expiry_shrank(&opened, Some(&target)).unwrap(),
+                shrank,
+                "opened pool with {label}"
+            );
+            assert!(!provider_target_expiry_shrank(&entry, None).unwrap());
+            assert!(!opened_provider_target_expiry_shrank(&opened, None).unwrap());
+            assert!(provider_target_expiry_shrank(&entry, Some(&too_long)).is_err());
+            assert!(opened_provider_target_expiry_shrank(&opened, Some(&too_long)).is_err());
+            opened.live.close().await;
+        }
+
+        // A binding pin authorizes only the exact account, workspace, versioned
+        // integration, provider, and fingerprint the target names.
+        let account = AccountId::new("10000000-0000-0000-0000-000000000001").unwrap();
+        let workspace = WorkspaceId::from(Uuid::new_v4());
+        assert!(
+            binding_pin(&account, workspace, &target).matches_target(&account, workspace, &target)
+        );
+        let other_account = AccountId::new("20000000-0000-0000-0000-000000000002").unwrap();
+        assert!(!binding_pin(&account, workspace, &target).matches_target(
+            &other_account,
+            workspace,
+            &target
+        ));
+        assert!(!binding_pin(&account, workspace, &target).matches_target(
+            &account,
+            WorkspaceId::from(Uuid::new_v4()),
+            &target
+        ));
+        type BindingCase = (
+            &'static str,
+            fn(&mut crate::connection::provider_local::ProviderLocalBindingPin),
+        );
+        let binding_cases: [BindingCase; 5] = [
+            ("an unrevisioned binding", |b| b.binding_revision = 0),
+            ("another integration", |b| {
+                b.integration_id = ProviderIntegrationId::from(Uuid::new_v4())
+            }),
+            ("another integration generation", |b| {
+                b.integration_generation += 1
+            }),
+            ("another provider", |b| b.provider = Provider::GcpCloudSql),
+            ("another fingerprint", |b| {
+                b.resource_fingerprint = "cd".repeat(32)
+            }),
+        ];
+        for (label, mutate) in binding_cases {
+            let mut binding = binding_pin(&account, workspace, &target);
+            mutate(&mut binding);
+            assert!(
+                !binding.matches_target(&account, workspace, &target),
+                "{label} must not match"
+            );
+        }
+
+        // The cache identity separates every canonical target field, including
+        // boundaries that plain concatenation would merge.
+        let neon = |project: &str, branch: &str, schemas: &[&str]| ProviderLocalResource::Neon {
+            project: project.into(),
+            branch: branch.into(),
+            database_id: "db".into(),
+            database: "app".into(),
+            schemas: schemas.iter().map(|schema| (*schema).into()).collect(),
+        };
+        let gcp = |instance: &str, engine, network_mode| ProviderLocalResource::GcpCloudSql {
+            project: "project".into(),
+            instance: instance.into(),
+            database: "app".into(),
+            engine,
+            network_mode,
+        };
+        let resources = [
+            neon("ab", "c", &["public"]),
+            neon("a", "bc", &["public"]),
+            neon("ab", "c", &["public", "audit"]),
+            neon("ab", "c", &["audit", "public"]),
+            neon("ab", "c", &["publicaudit"]),
+            gcp("primary", Engine::Postgres, GcpCloudSqlNetworkMode::Public),
+            gcp("primary", Engine::Mysql, GcpCloudSqlNetworkMode::Public),
+            gcp("primary", Engine::Sqlite, GcpCloudSqlNetworkMode::Public),
+            gcp(
+                "primary",
+                Engine::Postgres,
+                GcpCloudSqlNetworkMode::PrivateServicesAccess,
+            ),
+            gcp(
+                "primary",
+                Engine::Postgres,
+                GcpCloudSqlNetworkMode::PrivateServiceConnect,
+            ),
+            gcp("replica", Engine::Postgres, GcpCloudSqlNetworkMode::Public),
+        ];
+        let identities = resources
+            .iter()
+            .map(|resource| {
+                let mut target = neon_target(&pin);
+                target.resource = resource.clone();
+                target.cache_identity()
+            })
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(identities.len(), resources.len());
+        let mut same = neon_target(&pin);
+        same.expires_at += chrono::Duration::seconds(5);
+        assert_eq!(same.cache_identity(), neon_target(&pin).cache_identity());
 
         type TargetCase = (&'static str, fn(&mut ProviderLocalTarget));
         let target_cases: [TargetCase; 8] = [

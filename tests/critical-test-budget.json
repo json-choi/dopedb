@@ -55,7 +55,11 @@
     },
     "src-tauri/src/broker/session.rs": {
       "tests": 4,
-      "protects": "Capability scope, expiry, redaction, and revocation"
+      "protects": "Capability scope, expiry, redaction (including the registry's own records), and revocation; Agent bootstrap and process-bound authentication fail closed on malformed, mismatched, foreign-runtime, or expired requests, and revoke-all releases every session's proposals exactly once"
+    },
+    "src-tauri/src/broker/discovery.rs": {
+      "tests": 1,
+      "protects": "Broker runtime discovery resolves only product namespaces, publishes atomically with an owner-only 0700 directory and 0600 file, refuses invalid metadata, cleans up a failed replacement, and is removed only by the runtime that owns it"
     },
     "src-tauri/src/broker/external_agent_requests.rs": {
       "tests": 2,
@@ -63,11 +67,11 @@
     },
     "src-tauri/src/connection/runtime/authority.rs": {
       "tests": 2,
-      "protects": "Provider-local target authority is accepted only for the exact connection, revision, versioned integration, lowercase 64-hex fingerprint, provider, database, engine, bounded expiry, and read-only profile it pins; resolved local credentials cannot change identity, username, secret reference, database, credential mode, connection parameters, Neon host, or verified TLS, and Cloud SQL requires the returned CA"
+      "protects": "Provider-local target authority is accepted only for the exact connection, revision, versioned integration, lowercase 64-hex fingerprint, provider, database, engine, bounded expiry, and read-only profile it pins, is requested only for member-local Neon or Cloud SQL reads, and retires pools inside the authority expiry; binding pins match only the exact account, workspace, integration generation, provider, and fingerprint, and pool cache identities cannot collide across canonical targets; resolved local credentials cannot change identity, username, secret reference, database, credential mode, connection parameters, Neon host, or verified TLS, and Cloud SQL requires the returned CA"
     },
     "src-tauri/src/store/repositories/analysis_articles.rs": {
       "tests": 3,
-      "protects": "Analysis Article result-cache encryption, exact-authority binding, tamper rejection, and invalid-envelope denial"
+      "protects": "Analysis Article result-cache encryption, exact-authority binding of a stored result to its workspace, account partition, Article, revision, run, and result hash in both AAD and plaintext, tamper rejection, and invalid-envelope denial"
     },
     "src-tauri/src/features/providers/adapters/authority_tests.rs": {
       "tests": 4,
@@ -95,15 +99,19 @@
     },
     "src-tauri/src/safety/l2_enforce.rs": {
       "tests": 4,
-      "protects": "Result caps, truncation, column presence, numeric precision, and the EXPLAIN-preview opt-out before database access; optional isolated live-MySQL checks exercise Agent and Article transaction setup, write rejection, unchanged data, and cleanup after truncation or errors"
+      "protects": "Result caps, truncation, column presence, numeric precision, the per-engine read-only violation matrix mapped to Blocked, and the EXPLAIN-preview opt-out before database access; optional isolated live-MySQL checks exercise Agent and Article transaction setup, write rejection, unchanged data, and cleanup after truncation or errors"
+    },
+    "src-tauri/src/safety/l3_preview.rs": {
+      "tests": 1,
+      "protects": "Impact previews plan writes without executing them, report the database's own EXPLAIN failure, never plan DDL or privilege changes, and read row estimates in key priority order"
     },
     "src-tauri/src/safety/l4_gate.rs": {
       "tests": 7,
       "protects": "Write blocking, approval requirements, and privilege denial"
     },
     "src-tauri/src/store/tests/connections_scope.rs": {
-      "tests": 4,
-      "protects": "Account isolation, credential binding, managed write projection, scope ABA rejection, GitHub source revision IPC casing and graph-storage retirement preserving current source identities and connections, bounded History/Audit metadata and exact detail reads, streamed audit verification identity, current ACP provider state, strict connection snapshots, unreadable-session isolation, active-session-preserving history pruning, and ordered count/byte-bounded ACP replay batches"
+      "tests": 5,
+      "protects": "Account isolation, credential binding, managed write projection, scope ABA rejection, GitHub source revision IPC casing and graph-storage retirement preserving current source identities and connections, bounded History/Audit metadata and exact detail reads, streamed audit verification identity, current ACP provider state, strict connection snapshots, unreadable-session isolation, active-session-preserving history pruning, ordered count/byte-bounded ACP replay batches, and provisioned principal names and secret bindings that land only on the exact active member's binding without touching other accounts or non-provisioned templates"
     },
     "tools/release-updater-verify/src/main.rs": {
       "tests": 4,

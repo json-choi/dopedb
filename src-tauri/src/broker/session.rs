@@ -482,6 +482,46 @@ mod tests {
         assert!(!debug.contains(issued.token()));
         assert_eq!(issued.terminal_session_id, session_id);
         assert_eq!(registry.len(), 1);
+
+        // The registry's own records never print a bearer or bootstrap token.
+        let descriptor = registration(dopedb_protocol::AcpPluginId::Claude);
+        let agent_session_id = TerminalSessionId::from(Uuid::new_v4());
+        let agent = registry
+            .issue_agent(
+                agent_session_id,
+                &pin(Uuid::new_v4()),
+                [BrokerCapability::QueryPlan],
+                Duration::from_secs(60),
+                descriptor.clone(),
+            )
+            .unwrap();
+        let record_debug = |id| format!("{:?}", *registry.sessions.get(&id).unwrap());
+        for (id, token, expected) in [
+            (session_id, issued.token(), "bearer:<redacted>"),
+            (
+                agent_session_id,
+                agent.token(),
+                "agent_bootstrap:<redacted>",
+            ),
+        ] {
+            let debug = record_debug(id);
+            assert!(debug.contains(expected), "{expected} must label the record");
+            assert!(
+                !debug.contains(token),
+                "{expected} must not print its token"
+            );
+        }
+        let root = super::super::peer::current_process_identity_for_test().unwrap();
+        registry
+            .bind_agent_process(
+                &SessionAuthentication::new(agent_session_id.into(), agent.token().to_owned()),
+                root,
+                &descriptor,
+            )
+            .unwrap();
+        let bound = record_debug(agent_session_id);
+        assert!(bound.contains("\"agent_process\""));
+        assert!(!bound.contains(agent.token()));
     }
 
     #[test]
@@ -693,6 +733,49 @@ mod tests {
         assert_eq!(registry.len(), 2);
         assert_eq!(registry.revoke_connection(selected_connection), 1);
         assert_eq!(registry.len(), 1);
+
+        // Revoking everything removes every session and hands each one's
+        // proposals to cancellation exactly once, including a ledger whose
+        // session was already gone.
+        let (revoked_sender, mut revoked) = tokio::sync::mpsc::unbounded_channel();
+        registry.install_revocation_sink(revoked_sender);
+        let remaining = registry
+            .issue(
+                TerminalSessionId::from(Uuid::new_v4()),
+                &pin(first_connection.into()),
+                [BrokerCapability::ConnectionRead],
+                Duration::from_secs(60),
+            )
+            .unwrap();
+        let proposal = Uuid::new_v4();
+        registry.track_proposal(remaining.terminal_session_id, proposal);
+        let orphaned = TerminalSessionId::from(Uuid::new_v4());
+        let orphaned_proposal = Uuid::new_v4();
+        registry.proposals.insert(orphaned, vec![orphaned_proposal]);
+        registry.revoke_all();
+        assert_eq!(registry.len(), 0);
+        assert!(registry.proposals.is_empty());
+        assert!(registry
+            .authenticate(
+                &SessionAuthentication::new(
+                    remaining.terminal_session_id.into(),
+                    remaining.token().to_owned(),
+                ),
+                None,
+            )
+            .is_err());
+        let mut released = std::collections::HashMap::new();
+        while let Ok(revocation) = revoked.try_recv() {
+            assert!(
+                released
+                    .insert(revocation.terminal_session_id, revocation.operations)
+                    .is_none(),
+                "each session is reported once"
+            );
+        }
+        assert_eq!(released.len(), 3);
+        assert_eq!(released[&remaining.terminal_session_id], vec![proposal]);
+        assert_eq!(released[&orphaned], vec![orphaned_proposal]);
     }
 
     #[test]
@@ -731,6 +814,134 @@ mod tests {
         assert_eq!(registry.sweep_expired(), 1);
         assert_eq!(registry.len(), 0);
         assert_eq!(revoked.try_recv().unwrap().terminal_session_id, idle);
+
+        // Agent bootstrap and process-bound sessions fail closed on every
+        // malformed, mismatched, foreign-runtime, or expired authentication.
+        let root = super::super::peer::current_process_identity_for_test().unwrap();
+        let descriptor = registration(dopedb_protocol::AcpPluginId::Claude);
+        let issue_agent = |id| {
+            registry
+                .issue_agent(
+                    id,
+                    &pin(Uuid::new_v4()),
+                    [BrokerCapability::QueryPlan],
+                    Duration::from_secs(60),
+                    descriptor.clone(),
+                )
+                .unwrap()
+        };
+        let expire = |id| {
+            registry.sessions.get_mut(&id).unwrap().metadata.expires_at =
+                Utc::now() - chrono::Duration::seconds(1);
+        };
+        let bootstrap_id = TerminalSessionId::from(Uuid::new_v4());
+        let bootstrap = issue_agent(bootstrap_id);
+        let bootstrap_auth =
+            || SessionAuthentication::new(bootstrap_id.into(), bootstrap.token().to_owned());
+        let mut relative = descriptor.clone();
+        relative.adapter_entrypoint = "plugins/adapter.js".into();
+        let denied = [
+            ("relative registration path", bootstrap_auth(), relative),
+            (
+                "non-hex bootstrap token",
+                SessionAuthentication::new(bootstrap_id.into(), "zz".repeat(32)),
+                descriptor.clone(),
+            ),
+            (
+                "unknown session",
+                SessionAuthentication::new(Uuid::new_v4(), bootstrap.token().to_owned()),
+                descriptor.clone(),
+            ),
+            (
+                "missing bootstrap token",
+                SessionAuthentication::process_bound(bootstrap_id.into()),
+                descriptor.clone(),
+            ),
+        ];
+        for (label, authentication, registration) in denied {
+            assert!(
+                registry
+                    .bind_agent_process(&authentication, root, &registration)
+                    .is_err(),
+                "{label} must be denied"
+            );
+        }
+        registry
+            .sessions
+            .get_mut(&bootstrap_id)
+            .unwrap()
+            .metadata
+            .runtime_id = RuntimeId::from(Uuid::new_v4());
+        assert!(registry
+            .bind_agent_process(&bootstrap_auth(), root, &descriptor)
+            .is_err());
+        assert_eq!(
+            registry.len(),
+            1,
+            "a foreign-runtime record is only refused"
+        );
+        assert!(registry.revoke(bootstrap_id));
+        let _ = revoked.try_recv();
+
+        let expired_bootstrap_id = TerminalSessionId::from(Uuid::new_v4());
+        let expired_bootstrap = issue_agent(expired_bootstrap_id);
+        expire(expired_bootstrap_id);
+        assert!(registry
+            .bind_agent_process(
+                &SessionAuthentication::new(
+                    expired_bootstrap_id.into(),
+                    expired_bootstrap.token().to_owned()
+                ),
+                root,
+                &descriptor,
+            )
+            .is_err());
+        assert_eq!(registry.len(), 0, "an expired bootstrap is removed");
+        assert_eq!(
+            revoked.try_recv().unwrap().terminal_session_id,
+            expired_bootstrap_id
+        );
+
+        let bound_id = TerminalSessionId::from(Uuid::new_v4());
+        let bound = issue_agent(bound_id);
+        registry
+            .bind_agent_process(
+                &SessionAuthentication::new(bound_id.into(), bound.token().to_owned()),
+                root,
+                &descriptor,
+            )
+            .unwrap();
+        let bearer = registry
+            .issue(
+                TerminalSessionId::from(Uuid::new_v4()),
+                &pin(Uuid::new_v4()),
+                [BrokerCapability::ConnectionRead],
+                Duration::from_secs(60),
+            )
+            .unwrap();
+        let process_bound = SessionAuthentication::process_bound(bound_id.into());
+        assert!(registry.authenticate(&process_bound, Some(&root)).is_ok());
+        assert!(
+            registry.authenticate(&process_bound, None).is_err(),
+            "a process-bound session needs the peer identity"
+        );
+        assert!(
+            registry
+                .authenticate(
+                    &SessionAuthentication::process_bound(bearer.terminal_session_id.into()),
+                    Some(&root),
+                )
+                .is_err(),
+            "a bearer session cannot be used by process identity alone"
+        );
+        expire(bound_id);
+        assert!(registry.authenticate(&process_bound, Some(&root)).is_err());
+        assert!(
+            !registry.is_live(bound_id),
+            "an expired process session is removed"
+        );
+        assert_eq!(revoked.try_recv().unwrap().terminal_session_id, bound_id);
+        assert_eq!(registry.len(), 1);
     }
 }
 

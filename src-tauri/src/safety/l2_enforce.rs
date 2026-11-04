@@ -662,6 +662,127 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(unchanged.row_count, 5);
+
+        // Each engine's read-only refusal maps to Blocked, while any other
+        // database or driver error stays a plain database error.
+        let cases = [
+            (Engine::Postgres, "25006", "error", true),
+            (
+                Engine::Postgres,
+                "XX000",
+                "cannot execute INSERT in a read-only transaction",
+                true,
+            ),
+            (Engine::Postgres, "42P01", "relation does not exist", false),
+            (Engine::Mysql, "1792", "error", true),
+            (
+                Engine::Mysql,
+                "HY000",
+                "Cannot execute statement in a READ ONLY transaction.",
+                true,
+            ),
+            (
+                Engine::Mysql,
+                "1290",
+                "The server is running with the --read-only option",
+                true,
+            ),
+            (Engine::Mysql, "1146", "Table doesn't exist", false),
+            (
+                Engine::Sqlite,
+                "8",
+                "attempt to write a readonly database",
+                true,
+            ),
+            (Engine::Sqlite, "1", "no such table: t", false),
+            (Engine::Mongodb, "25006", "read-only transaction", false),
+            (Engine::Bigquery, "25006", "read-only transaction", false),
+        ];
+        for (engine, code, message, violation) in cases {
+            let label = format!("{engine:?} {code} {message}");
+            assert_eq!(
+                is_read_only_violation(engine, &engine_error(code, message)),
+                violation,
+                "{label}"
+            );
+            assert!(!is_read_only_violation(engine, &sqlx::Error::PoolTimedOut));
+            match (map_readonly(engine, engine_error(code, message)), violation) {
+                (AppError::Blocked { reason }, true) => assert!(
+                    reason.contains(&format!("({})", engine_label(engine))),
+                    "{label}"
+                ),
+                (AppError::Db(_), false) => {}
+                (other, _) => panic!("{label} mapped to {other:?}"),
+            }
+            assert!(matches!(
+                map_readonly_app(engine, AppError::Config("unchanged".into())),
+                AppError::Config(reason) if reason == "unchanged"
+            ));
+        }
+        assert!(matches!(
+            map_readonly_app(
+                Engine::Sqlite,
+                AppError::Db(engine_error("8", "attempt to write a readonly database"))
+            ),
+            AppError::Blocked { .. }
+        ));
+        let labels = [
+            Engine::Postgres,
+            Engine::Mysql,
+            Engine::Sqlite,
+            Engine::Mongodb,
+            Engine::Bigquery,
+        ]
+        .map(engine_label);
+        assert_eq!(
+            labels,
+            ["postgres", "mysql", "sqlite", "mongodb", "bigquery"]
+        );
+    }
+
+    /// A database error carrying an exact engine code and message.
+    #[derive(Debug)]
+    struct EngineError {
+        code: &'static str,
+        message: &'static str,
+    }
+
+    impl std::fmt::Display for EngineError {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str(self.message)
+        }
+    }
+
+    impl std::error::Error for EngineError {}
+
+    impl sqlx::error::DatabaseError for EngineError {
+        fn message(&self) -> &str {
+            self.message
+        }
+
+        fn code(&self) -> Option<std::borrow::Cow<'_, str>> {
+            Some(self.code.into())
+        }
+
+        fn as_error(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
+            self
+        }
+
+        fn as_error_mut(&mut self) -> &mut (dyn std::error::Error + Send + Sync + 'static) {
+            self
+        }
+
+        fn into_error(self: Box<Self>) -> Box<dyn std::error::Error + Send + Sync + 'static> {
+            self
+        }
+
+        fn kind(&self) -> sqlx::error::ErrorKind {
+            sqlx::error::ErrorKind::Other
+        }
+    }
+
+    fn engine_error(code: &'static str, message: &'static str) -> sqlx::Error {
+        sqlx::Error::Database(Box::new(EngineError { code, message }))
     }
 
     #[tokio::test]

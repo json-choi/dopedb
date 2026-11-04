@@ -81,9 +81,10 @@ handler.
 ### Testing Requirements
 
 - `pnpm test:rust` (`cargo test --package dopedb --lib`) runs this module.
-  `session.rs` (4 tests) and `external_agent_requests.rs` (2 tests — bounded,
-  exactly-once external approvals and per-session proposal queues) are
-  budget-protected under the repository's 208-test cap
+  `session.rs` (4 tests), `discovery.rs` (1 test — owner-only atomic runtime
+  file publication and owner-only removal), and `external_agent_requests.rs`
+  (2 tests — bounded, exactly-once external approvals and per-session proposal
+  queues) are budget-protected under the repository's 208-test cap
   (`tests/critical-test-budget.json`); a new test here must replace a
   lower-value existing test rather than raise the cap — run
   `pnpm check:test-budget` after a test change. `dispatch/mod.rs` also exposes
