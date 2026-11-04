@@ -53,7 +53,7 @@
       "tests": 8,
       "protects": "Versioned public CLI and Cloud↔Desktop sync, managed lease, and Analysis Article wire contracts with fail-closed decoding; schema diff JSON and shared Desktop comparison fixture"
     },
-    "src-tauri/src/broker/session.rs": {
+    "src-tauri/src/broker/session_tests.rs": {
       "tests": 4,
       "protects": "Capability scope, expiry, redaction (including the registry's own records), and revocation; Agent bootstrap and process-bound authentication fail closed on malformed, mismatched, foreign-runtime, or expired requests, and revoke-all releases every session's proposals exactly once"
     },
@@ -65,7 +65,7 @@
       "tests": 2,
       "protects": "External Agent configure/start approvals stay bounded to four pending requests, are decided exactly once, fail closed on identifier collision or a departed requester, and reject everything on shutdown; external SQL proposals reach only the bounded approval queue of their own approved session, deduplicate re-announcements, never limit in-app sessions, and are released exactly per session on revoke or expiry"
     },
-    "src-tauri/src/connection/runtime/authority.rs": {
+    "src-tauri/src/connection/runtime/authority_tests.rs": {
       "tests": 2,
       "protects": "Provider-local target authority is accepted only for the exact connection, revision, versioned integration, lowercase 64-hex fingerprint, provider, database, engine, bounded expiry, and read-only profile it pins, is requested only for member-local Neon or Cloud SQL reads, and retires pools inside the authority expiry; binding pins match only the exact account, workspace, integration generation, provider, and fingerprint, and pool cache identities cannot collide across canonical targets; resolved local credentials cannot change identity, username, secret reference, database, credential mode, connection parameters, Neon host, or verified TLS, and Cloud SQL requires the returned CA"
     },
