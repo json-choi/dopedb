@@ -668,3 +668,7 @@ impl WorkspaceAdminOperation {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "routes_tests.rs"]
+mod tests;
