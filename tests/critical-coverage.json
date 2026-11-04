@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "target": 90,
+    "rule": "Lists the security-boundary and wire-contract code whose unit-test line coverage must reach the target. Coverage comes from tests that assert an invariant, never from assertion-free calls. Adding a file or exclusion needs a reason; tests still obey tests/critical-test-budget.json.",
+    "integrationOnly": "Functions that need a live database, network, OS keychain, or child process are excluded from the target and listed with the reason. They are covered by integration suites such as provider-postgres, not by unit tests."
+  },
+  "rust": {
+    "files": [
+      "src-tauri/src/broker/discovery.rs",
+      "src-tauri/src/broker/external_agent_requests.rs",
+      "src-tauri/src/broker/session.rs",
+      "src-tauri/src/connection/provider_local.rs",
+      "src-tauri/src/connection/runtime/authority.rs",
+      "src-tauri/src/features/agents/domain.rs",
+      "src-tauri/src/features/analysis_articles/domain.rs",
+      "src-tauri/src/features/connections/domain.rs",
+      "src-tauri/src/features/direct_access/domain.rs",
+      "src-tauri/src/features/knowledge/domain.rs",
+      "src-tauri/src/features/providers/domain.rs",
+      "src-tauri/src/features/queries/domain.rs",
+      "src-tauri/src/features/terminals/domain.rs",
+      "src-tauri/src/features/workspace_admin/domain.rs",
+      "src-tauri/src/features/workspace_admin/domain/routes.rs",
+      "src-tauri/src/features/workspace_admin/domain/values.rs",
+      "src-tauri/src/features/workspaces/domain.rs",
+      "src-tauri/src/kernel/access.rs",
+      "src-tauri/src/kernel/environment.rs",
+      "src-tauri/src/kernel/identity.rs",
+      "src-tauri/src/kernel/sql_namespace.rs",
+      "src-tauri/src/kernel/sync.rs",
+      "src-tauri/src/operations/canonicalize.rs",
+      "src-tauri/src/operations/state_machine.rs",
+      "src-tauri/src/safety/l1_parse.rs",
+      "src-tauri/src/safety/l1_pragma.rs",
+      "src-tauri/src/safety/l1_rewrite.rs",
+      "src-tauri/src/safety/l1_statement_kinds.rs",
+      "src-tauri/src/safety/l1_tables.rs",
+      "src-tauri/src/safety/l2_enforce.rs",
+      "src-tauri/src/safety/l3_preview.rs",
+      "src-tauri/src/safety/l4_gate.rs",
+      "src-tauri/src/store/repositories/analysis_articles.rs",
+      "src-tauri/src/store/repositories/direct_access.rs"
+    ],
+    "integrationOnly": {
+      "src-tauri/src/connection/runtime/authority.rs": {
+        "authorize_pin": "Asks the remote workspace authority and provider-local port over the network before a pool is opened",
+        "connect_authorized": "Opens a live driver pool, SSH tunnel, or Cloud SQL connector and holds a managed lease",
+        "open_live": "Starts the system ssh tunnel or Cloud SQL connector process and connects a live driver",
+        "retire_opened": "Closes live pools, tunnels, connector processes, and managed leases"
+      },
+      "src-tauri/src/safety/l2_enforce.rs": {
+        "run_read_only_cancellable": "Its uncovered branch dispatches to the BigQuery service over the network",
+        "run_read_only_byte_capped_cancellable": "Its uncovered branch dispatches to the BigQuery service over the network",
+        "run_read_only_inner": "The Postgres and MySQL read-only transaction branches need a live server; SQLite runs in unit tests",
+        "run_read_only_byte_capped_inner": "The Postgres and MySQL read-only transaction branches need a live server; SQLite runs in unit tests"
+      },
+      "src-tauri/src/safety/l3_preview.rs": {
+        "explain": "Issues engine-specific EXPLAIN statements against a live Postgres, MySQL, BigQuery, or Cloudflare D1 target"
+      }
+    }
+  },
+  "frontend": {
+    "files": [
+      "src/features/agents/approvalActivity.ts",
+      "src/features/agents/sessionFocus.ts",
+      "src/features/agents/sqlProposal.ts",
+      "src/features/connections/domain.ts",
+      "src/features/providers/domain.ts",
+      "src/features/queries/domain.ts",
+      "src/features/query/runSignal.ts",
+      "src/features/safetySettings/policy.ts",
+      "src/features/skills/setupPolicy.ts",
+      "src/features/workspaceAdmin/members/domain.ts",
+      "src/features/workspaceAdmin/providers/domain.ts",
+      "src/features/workspaces/authPolicy.ts"
+    ]
+  }
+}
