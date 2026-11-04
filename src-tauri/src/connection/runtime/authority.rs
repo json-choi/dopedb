@@ -489,3 +489,231 @@ pub(super) fn validate_resolved_provider_local_profile(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use chrono::Utc;
+    use uuid::Uuid;
+
+    use super::*;
+    use crate::connection::provider_local::GcpCloudSqlNetworkMode;
+    use crate::kernel::access::{
+        AccountScope, ActiveResourceScope, CatalogCachePolicy, WorkspaceKind,
+    };
+    use crate::kernel::identity::ProviderIntegrationId;
+    use crate::model::WorkspaceConnectionAccess;
+
+    const CA: &str = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+
+    fn neon_pin() -> PinnedConnection {
+        let connection_id = Uuid::new_v4();
+        PinnedConnection {
+            scope: ActiveResourceScope {
+                workspace_id: Uuid::new_v4(),
+                workspace_kind: WorkspaceKind::Team,
+                selected_account_id: None,
+                account_scope: AccountScope::Personal,
+                generation: 7,
+            },
+            connection_id,
+            connection_revision: 11,
+            binding_revision: 3,
+            binding_updated_at: Utc::now().to_rfc3339(),
+            profile: ConnectionProfile {
+                id: connection_id,
+                name: "orders".into(),
+                engine: Engine::Postgres,
+                provider: Provider::Neon,
+                driver_id: None,
+                host: String::new(),
+                port: 0,
+                database: "app".into(),
+                username: "dopedb_member".into(),
+                sslmode: "verify-full".into(),
+                extra_params: HashMap::new(),
+                readonly_default: true,
+                allow_writes: false,
+                secret_ref: None,
+                env: None,
+                effective_env: None,
+                schema_group: None,
+                workspace_access: WorkspaceConnectionAccess::Read,
+                credential_mode: WorkspaceCredentialMode::MemberLocal,
+                provider_target: None,
+                schema_access_available: false,
+            },
+            requires_remote_rbac: true,
+            catalog_cache_policy: CatalogCachePolicy::Persistent,
+        }
+    }
+
+    fn neon_target(pin: &PinnedConnection) -> ProviderLocalTarget {
+        ProviderLocalTarget {
+            connection_id: ConnectionId::from(pin.connection_id),
+            connection_revision: pin.connection_revision,
+            integration_id: ProviderIntegrationId::from(Uuid::new_v4()),
+            integration_generation: 1,
+            provider: Provider::Neon,
+            resource_fingerprint: "ab".repeat(32),
+            resource: ProviderLocalResource::Neon {
+                project: "project".into(),
+                branch: "main".into(),
+                database_id: "db".into(),
+                database: "app".into(),
+                schemas: vec!["public".into()],
+            },
+            expires_at: Utc::now() + chrono::Duration::seconds(120),
+        }
+    }
+
+    fn resolved_neon(pin: &PinnedConnection) -> ConnectionProfile {
+        ConnectionProfile {
+            host: "ep-quiet-1.us-east-2.aws.neon.tech".into(),
+            port: 5432,
+            ..pin.profile.clone()
+        }
+    }
+
+    #[test]
+    fn provider_target_metadata_must_match_the_exact_read_only_pin() {
+        let pin = neon_pin();
+        validate_provider_local_target(&pin, &neon_target(&pin)).unwrap();
+
+        type TargetCase = (&'static str, fn(&mut ProviderLocalTarget));
+        let target_cases: [TargetCase; 8] = [
+            ("another connection", |t| {
+                t.connection_id = ConnectionId::from(Uuid::new_v4())
+            }),
+            ("stale revision", |t| t.connection_revision -= 1),
+            ("unversioned integration", |t| t.integration_generation = 0),
+            ("non-hex fingerprint", |t| {
+                t.resource_fingerprint = "AB".repeat(32)
+            }),
+            ("short fingerprint", |t| t.resource_fingerprint.truncate(63)),
+            ("another provider", |t| t.provider = Provider::GcpCloudSql),
+            ("expiry beyond the bounded window", |t| {
+                t.expires_at = Utc::now() + chrono::Duration::minutes(10)
+            }),
+            ("another database", |t| {
+                if let ProviderLocalResource::Neon { database, .. } = &mut t.resource {
+                    *database = "other".into();
+                }
+            }),
+        ];
+        for (label, mutate) in target_cases {
+            let mut target = neon_target(&pin);
+            mutate(&mut target);
+            assert!(
+                validate_provider_local_target(&pin, &target).is_err(),
+                "{label} must be refused"
+            );
+        }
+
+        type PinCase = (&'static str, fn(&mut PinnedConnection));
+        let pin_cases: [PinCase; 2] = [
+            ("write-enabled profile", |p| p.profile.allow_writes = true),
+            ("profile without read-only default", |p| {
+                p.profile.readonly_default = false
+            }),
+        ];
+        for (label, mutate) in pin_cases {
+            let mut writable = neon_pin();
+            mutate(&mut writable);
+            let target = neon_target(&writable);
+            assert!(
+                validate_provider_local_target(&writable, &target).is_err(),
+                "{label} must be refused"
+            );
+        }
+
+        // A Cloud SQL resource is accepted only for the engine the profile pinned.
+        let mut gcp = neon_pin();
+        gcp.profile.provider = Provider::GcpCloudSql;
+        let mut target = neon_target(&gcp);
+        target.provider = Provider::GcpCloudSql;
+        target.resource = ProviderLocalResource::GcpCloudSql {
+            project: "project".into(),
+            instance: "instance".into(),
+            database: "app".into(),
+            engine: Engine::Postgres,
+            network_mode: GcpCloudSqlNetworkMode::Public,
+        };
+        validate_provider_local_target(&gcp, &target).unwrap();
+        if let ProviderLocalResource::GcpCloudSql { engine, .. } = &mut target.resource {
+            *engine = Engine::Mysql;
+        }
+        assert!(validate_provider_local_target(&gcp, &target).is_err());
+    }
+
+    #[test]
+    fn resolved_credentials_cannot_change_identity_scope_or_transport_security() {
+        let pin = neon_pin();
+        let target = neon_target(&pin);
+        validate_resolved_provider_local_profile(&pin.profile, &target, &resolved_neon(&pin))
+            .unwrap();
+
+        type ProfileCase = (&'static str, fn(&mut ConnectionProfile));
+        let cases: [ProfileCase; 11] = [
+            ("enabled writes", |p| p.allow_writes = true),
+            ("another username", |p| p.username = "app_owner".into()),
+            ("another secret reference", |p| {
+                p.secret_ref = Some("other".into())
+            }),
+            ("another database", |p| p.database = "other".into()),
+            ("another credential mode", |p| {
+                p.credential_mode = WorkspaceCredentialMode::Local
+            }),
+            ("a non-Neon host", |p| p.host = "db.example.test".into()),
+            ("a URL-shaped host", |p| {
+                p.host = "postgres://ep.neon.tech".into()
+            }),
+            ("an unverified TLS mode", |p| p.sslmode = "require".into()),
+            ("a zero port", |p| p.port = 0),
+            ("an empty username", |p| p.username.clear()),
+            ("an injected connection parameter", |p| {
+                p.extra_params
+                    .insert("options".into(), "-c role=app_owner".into());
+            }),
+        ];
+        for (label, mutate) in cases {
+            let mut resolved = resolved_neon(&pin);
+            mutate(&mut resolved);
+            assert!(
+                validate_resolved_provider_local_profile(&pin.profile, &target, &resolved).is_err(),
+                "{label} must be refused"
+            );
+        }
+
+        // Cloud SQL must verify the server with the CA the authority returned.
+        let mut original = pin.profile.clone();
+        original.provider = Provider::GcpCloudSql;
+        let mut resolved = ConnectionProfile {
+            host: "10.0.0.5".into(),
+            port: 5432,
+            sslmode: "verify-ca".into(),
+            ..original.clone()
+        };
+        assert!(
+            validate_resolved_provider_local_profile(&original, &target, &resolved).is_err(),
+            "Cloud SQL without a CA must be refused"
+        );
+        resolved
+            .extra_params
+            .insert("sslrootcert_pem".into(), "not a certificate".into());
+        assert!(
+            validate_resolved_provider_local_profile(&original, &target, &resolved).is_err(),
+            "Cloud SQL with a malformed CA must be refused"
+        );
+        resolved
+            .extra_params
+            .insert("sslrootcert_pem".into(), CA.into());
+        validate_resolved_provider_local_profile(&original, &target, &resolved).unwrap();
+        resolved.sslmode = "require".into();
+        assert!(
+            validate_resolved_provider_local_profile(&original, &target, &resolved).is_err(),
+            "Cloud SQL without server verification must be refused"
+        );
+    }
+}

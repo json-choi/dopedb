@@ -636,6 +636,32 @@ mod tests {
             .unwrap();
         assert_eq!(r.row_count, 5);
         assert!(!r.truncated);
+
+        // A write that reaches the read path is refused by the database session
+        // itself and reported as blocked, on both the Agent and Article runners.
+        for sql in ["DELETE FROM t", "INSERT INTO t(id, name) VALUES(6, 'n6')"] {
+            let agent = run_read_only(PoolRef::Sqlite(&pool), sql, 100).await;
+            let article = run_read_only_byte_capped_cancellable(
+                PoolRef::Sqlite(&pool),
+                sql,
+                100,
+                64 * 1024,
+                None,
+            )
+            .await;
+            for result in [agent, article] {
+                match result {
+                    Err(AppError::Blocked { reason }) => {
+                        assert!(reason.contains("read-only session rejected a write (sqlite)"))
+                    }
+                    other => panic!("{sql} must be blocked, got {other:?}"),
+                }
+            }
+        }
+        let unchanged = run_read_only(PoolRef::Sqlite(&pool), "SELECT id FROM t", 100)
+            .await
+            .unwrap();
+        assert_eq!(unchanged.row_count, 5);
     }
 
     #[tokio::test]
