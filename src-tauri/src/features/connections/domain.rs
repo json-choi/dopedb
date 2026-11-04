@@ -381,12 +381,18 @@ mod tests {
                 "readonly"
             ]
         );
-        for secret in [
-            "db.example.invalid",
-            "reader",
-            "keychain-item-must-not-escape",
+        // Host, username, and keychain reference never reach the Agent; the
+        // message names the field so a failure never echoes its value.
+        let wire_text = wire.to_string();
+        for (field, hidden) in [
+            ("host", "db.example.invalid"),
+            ("username", "reader"),
+            ("secretRef", "keychain-item-must-not-escape"),
         ] {
-            assert!(!wire.to_string().contains(secret), "{secret} leaked");
+            assert!(
+                !wire_text.contains(hidden),
+                "{field} reached the Agent projection"
+            );
         }
 
         // A CLI name selects exactly one connection; case variants and duplicates
