@@ -2,56 +2,6 @@
 # transitive dependencies. OSV still fails CI for every other finding.
 
 [[IgnoredVulns]]
-id = "RUSTSEC-2024-0411"
-ignoreUntil = 2026-12-04
-reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0412"
-ignoreUntil = 2026-12-04
-reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0413"
-ignoreUntil = 2026-12-04
-reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0414"
-ignoreUntil = 2026-12-04
-reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0415"
-ignoreUntil = 2026-12-04
-reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0416"
-ignoreUntil = 2026-12-04
-reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0417"
-ignoreUntil = 2026-12-04
-reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0418"
-ignoreUntil = 2026-12-04
-reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0419"
-ignoreUntil = 2026-12-04
-reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0420"
-ignoreUntil = 2026-12-04
-reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
-
-[[IgnoredVulns]]
 id = "RUSTSEC-2024-0429"
 ignoreUntil = 2026-12-04
 reason = "The affected glib 0.18 path is Linux-only through Tauri GTK3 and is not compiled for the currently shipped macOS or verified Windows targets."
@@ -85,11 +35,6 @@ reason = "Unmaintained-only advisory in current Tauri 2.11.5's urlpattern build 
 id = "RUSTSEC-2025-0100"
 ignoreUntil = 2026-12-04
 reason = "Unmaintained-only advisory in current Tauri 2.11.5's urlpattern build dependency; no compatible app-level replacement exists."
-
-[[IgnoredVulns]]
-id = "GHSA-qwgh-2vcv-g2f7"
-ignoreUntil = 2026-11-30
-reason = "block-buffer 0.10.4 can corrupt its cursor only when the compress callback panics and the panic is caught before the buffer is reused. Its only callers are digest 0.10 hashes (sha2, hmac, pbkdf2, scrypt via sqlx, minisign and Tauri), whose compress functions do not panic. The fix exists only in block-buffer 0.12.1, which the digest 0.10 ecosystem cannot use."
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2026-0370"
